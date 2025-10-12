@@ -16,6 +16,7 @@ latest = {
     'depth_m': None,
     'depth_ft': None,
     'rpm': None,
+    'time': None
 }
 
 def meters_to_feet(m):
@@ -23,6 +24,7 @@ def meters_to_feet(m):
 
 def print_status():
     #sys.stdout.write("\033[H\033[J")  # Clear screen
+    print(f"LTime          : {latest['time']or '--'}")  
     print(f"Engine Hours   : {latest['engine_hours'] or '--'} h")
     print(f"Engine Temp    : {latest['engine_temp'] or '--'} °C")
     print(f"Fuel Level     : {latest['fuel'] or '--'} L")
@@ -69,6 +71,11 @@ def parse_line(line):
                 latest['latitude'] = convert_latitude_to_dms( line.split(',')[2] + line.split(',')[3])
                 latest['longitude'] = convert_longitude_to_dms( line.split(',')[4] + line.split(',')[5])
             except: pass
+            
+    elif line.startswith('$YDZDA'): 
+            try:
+                latest['time'] = parse_ydzda(line)
+            except: pass
 
     elif line.startswith('$PCDIN') and '01F201' in line:
         try:
@@ -109,6 +116,26 @@ def convert_longitude_to_dms(lon_str):
     minutes = int(minutes_float)
     seconds = (minutes_float - minutes) * 60
     return f"{degrees}°{minutes:02d}'{seconds:.1f}\" {direction}"
+
+def parse_ydzda(sentence):
+    # Example input: "$YDZDA,212636.03,12,10,2025,,*6A"
+    parts = sentence.split(',')
+
+    # Extract time and date components
+    time_raw = parts[1]  # HHMMSS.ss
+    day = int(parts[2])
+    month = int(parts[3])
+    year = int(parts[4])
+
+    # Parse time
+    hour = int(time_raw[:2])
+    minute = int(time_raw[2:4])
+    second = float(time_raw[4:])
+
+    # Format output
+    return f"UTC Time: {hour:02d}:{minute:02d}:{second:05.2f} on {year}-{month:02d}-{day:02d}"
+
+
 
 if __name__ == "__main__":
     listen_nmea2000()
