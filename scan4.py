@@ -6,6 +6,8 @@ PORT = 2000
 
 # Initialize latest values
 latest = {
+    'latitude': None,
+    'longitude': None,
     'engine_hours': None,
     'engine_temp': None,
     'fuel': None,
@@ -20,7 +22,7 @@ def meters_to_feet(m):
     return round(m * 3.28084, 2)
 
 def print_status():
-    sys.stdout.write("\033[H\033[J")  # Clear screen
+    #sys.stdout.write("\033[H\033[J")  # Clear screen
     print(f"Engine Hours   : {latest['engine_hours'] or '--'} h")
     print(f"Engine Temp    : {latest['engine_temp'] or '--'} °C")
     print(f"Fuel Level     : {latest['fuel'] or '--'} L")
@@ -28,17 +30,22 @@ def print_status():
     print(f"Engine RPM     : {latest['rpm'] or '--'}")
     print(f"Heading        : {latest['heading'] or '--'}° True")
     print(f"Depth          : {latest['depth_m'] or '--'} m | {latest['depth_ft'] or '--'} ft")
+    print(f"Latitude       : {latest['latitude']or '--'}")
+    print(f"Longitude      : {latest['longitude']or '--'}")    
     print("-" * 40)
 
 def parse_line(line):
     if line.startswith('$YDXDR'):
         fields = line.split(',')
+        print(f"fields0 -{fields}")
         if 'EngineHours#0' in line:
             try:
                 latest['engine_hours'] = round(float(fields[2]), 2)
+                print(f"fields1 -{fields}")
             except: pass
         elif 'Engine#0' in line and 'Fuel#0' in line and 'Alternator#0' in line:
             try:
+                print(f"fields2 -{fields}")
                 latest['engine_temp'] = round(float(fields[2]), 1)
                 latest['fuel'] = 1
                 latest['voltage'] = round(float(fields[10]), 2)
@@ -49,12 +56,19 @@ def parse_line(line):
             latest['heading'] = round(float(line.split(',')[1]), 1)
         except: pass
 
-    elif line.startswith('$YDDPT'):
+    elif line.startswith('$YDDBT'):
         try:
-            depth_m = float(line.split(',')[1])
-            latest['depth_m'] = round(depth_m, 2)
-            latest['depth_ft'] = meters_to_feet(depth_m)
+            depth = float(line.split(',')[1])
+            latest['depth_m'] = round(float(line.split(',')[3]),2)
+            latest['depth_ft'] = round(float(line.split(',')[1]), 3)
         except: pass
+
+    elif line.startswith('$YDGGA'):
+            try:
+                
+                latest['latitude'] = line.split(',')[2] + line.split(',')[3]
+                latest['longitude'] = line.split(',')[4] + line.split(',')[5]
+            except: pass
 
     elif line.startswith('$PCDIN') and '01F201' in line:
         try:
