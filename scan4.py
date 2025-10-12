@@ -66,7 +66,7 @@ def parse_line(line):
     elif line.startswith('$YDGGA'):
             try:
                 
-                latest['latitude'] = convert_to_dms( line.split(',')[2] + line.split(',')[3])
+                latest['latitude'] = convert_latitude_to_dms( line.split(',')[2] + line.split(',')[3])
                 latest['longitude'] = convert_longitude_to_dms( line.split(',')[4] + line.split(',')[5])
             except: pass
 
@@ -90,32 +90,25 @@ def listen_nmea2000():
             for line in data.decode(errors='ignore').splitlines():
                 parse_line(line)
                 
-def convert_to_dms(lat_str):
+def convert_latitude_to_dms(lat_str):
     # Example input: "3309.4603N"
     direction = lat_str[-1]
     raw = lat_str[:-1]
-
     degrees = int(raw[:2])
     minutes_float = float(raw[2:])
-
     minutes = int(minutes_float)
     seconds = (minutes_float - minutes) * 60
-
-    return f"{degrees}°{minutes:02d}'{seconds:.1f}\"{direction}"
+    return f"{degrees}°{minutes:02d}'{seconds:.1f}\" {direction}"
 
 def convert_longitude_to_dms(lon_str):
     # Example input: "09659.5216W"
     direction = lon_str[-1]
     raw = lon_str[:-1]
-
     degrees = int(raw[:3])
     minutes_float = float(raw[3:])
-
     minutes = int(minutes_float)
     seconds = (minutes_float - minutes) * 60
-
-    return f"{degrees}°{minutes:02d}'{seconds:.1f}\"{direction}"
-
+    return f"{degrees}°{minutes:02d}'{seconds:.1f}\" {direction}"
 
 if __name__ == "__main__":
     listen_nmea2000()
