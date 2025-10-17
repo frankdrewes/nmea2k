@@ -1,5 +1,6 @@
 import socket
 import sys
+import time
 
 HOST = '192.168.1.53'
 PORT = 2000
@@ -35,6 +36,7 @@ def print_status():
     print(f"Latitude       : {latest['latitude']or '--'}")
     print(f"Longitude      : {latest['longitude']or '--'}")    
     print("-" * 40)
+    time.sleep(30)
 
 def parse_line(line):
     if line.startswith('$YDXDR'):
