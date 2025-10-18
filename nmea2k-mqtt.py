@@ -19,6 +19,7 @@ MQTT_USERNAME = os.getenv("MQTT_USERNAME")
 MQTT_PASSWORD = os.getenv("MQTT_PASSWORD")
 
 MQTT_TOPIC =  "sensor/nmea2k"
+MQTT_LOCATION_TOPIC= "autodiscovery/device_tracker/boat_tracker/config"
 
 GATEWAY_HOST = '192.168.1.53'
 GATEWAY_PORT = 2000
@@ -55,9 +56,9 @@ def log_to_mqtt(latitude,
     table.add_column("Property", style="bold cyan")
     table.add_column("Value", style="white")
 
-    table.add_row("LTime", latest.get("time", "--"))
-    table.add_row("Engine Hours", f"{latest.get('engine_hours', '--')} h")
-    table.add_row("Engine Temp", f"{latest.get('engine_temp', '--')} °C")
+    table.add_row("UTC Time", latest.get("time", "--"))
+    table.add_row("Engine Hours", f"{latest.get('engine_hours', '--')} hours")
+    table.add_row("Engine Temp", f"{latest.get('engine_temp', '--')} °F")
     table.add_row("Fuel Level", f"{latest.get('fuel', '--')} L")
     table.add_row("Voltage", f"{latest.get('voltage', '--')} V")
     table.add_row("Engine RPM", f"{latest.get('rpm', '--')}")
@@ -73,8 +74,6 @@ def log_to_mqtt(latitude,
     print(f"writing to MQTT topic {MQTT_TOPIC}")
     
     payload = {
-    "latitude": f"{latitude}",
-    "longitude": f"{longitude}",
     "engine_hours": f"{engine_hours}",
     "engine_temp": f"{engine_temp}",
     "heading": f"{heading}",
@@ -82,13 +81,21 @@ def log_to_mqtt(latitude,
     "engine_rpm": f"{engine_rpm}",
                 }
     
+    location={
+    "latitude": f"{latitude}",
+    "longitude": f"{longitude}",
+                }
+    
     client = mqtt.Client()
     client.username_pw_set(MQTT_USERNAME,MQTT_PASSWORD)
     client.connect(MQTT_SERVER,int(MQTT_SERVER_PORT), 60)
     mqtt_result= client.publish(MQTT_TOPIC, json.dumps(payload))
+    mqtt_result2 = client.publish(MQTT_LOCATION_TOPIC, json.dumps(location))
     
     if mqtt_result.is_published:
-        print(f"MQTT publish results -> {mqtt_result.rc}")
+        print(f"MQTT #1 publish results -> {mqtt_result.rc}")
+    if mqtt_result2.is_published:
+        print(f"MQTT #2 publish results -> {mqtt_result2.rc}")
     
     print(f"MQTT publish done")
     time.sleep(30)
@@ -130,8 +137,10 @@ def parse_line(line):
 
     elif line.startswith('$YDGGA'):
             try:
-                latest['latitude'] = convert_latitude_to_dms( line.split(',')[2] + line.split(',')[3])
-                latest['longitude'] = convert_longitude_to_dms( line.split(',')[4] + line.split(',')[5])
+                #latest['latitude'] = convert_latitude_to_dms( line.split(',')[2] + line.split(',')[3])
+                latest['latitude'] = line.split(',')[2] 
+                #latest['longitude'] = convert_longitude_to_dms( line.split(',')[4] + line.split(',')[5])
+                latest['longitude'] = line.split(',')[4] 
             except: pass
             
     elif line.startswith('$YDZDA'): 
@@ -176,7 +185,8 @@ def convert_latitude_to_dms(lat_str):
     minutes_float = float(raw[2:])
     minutes = int(minutes_float)
     seconds = (minutes_float - minutes) * 60
-    return f"{degrees}°{minutes:02d}'{seconds:.1f}\" {direction}"
+    result = f"{degrees}°{minutes:02d}'{seconds:.1f}\" {direction}"
+    return result
 
 def convert_longitude_to_dms(lon_str):
     # Example input: "09659.5216W"
@@ -186,7 +196,8 @@ def convert_longitude_to_dms(lon_str):
     minutes_float = float(raw[3:])
     minutes = int(minutes_float)
     seconds = (minutes_float - minutes) * 60
-    return f"{degrees}°{minutes:02d}'{seconds:.1f}\" {direction}"
+    result = f"{degrees}°{minutes:02d}'{seconds:.1f}\" {direction}"
+    return result
 
 def parse_ydzda(sentence):
     # Example input: "$YDZDA,212636.03,12,10,2025,,*6A"
