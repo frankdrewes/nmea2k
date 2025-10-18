@@ -15,7 +15,8 @@ import paho.mqtt.client as mqtt
 from dotenv import load_dotenv
 import os
 
-console = Console()
+
+console = Console(force_terminal=True)
 
 load_dotenv()  # Loads from .env by default
 
