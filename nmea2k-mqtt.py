@@ -89,16 +89,16 @@ def log_to_mqtt(latitude,
     
 def build_panel(latest):
     lines = [
-        f"[bold cyan]UTC Time[/bold cyan]: {latest.get('time', '--')}",
-        f"[bold cyan]Engine Hours[/bold cyan]: {latest.get('engine_hours', '--')} hours",
-        f"[bold cyan]Engine Temp[/bold cyan]: {latest.get('engine_temp', '--')} °F",
-        f"[bold cyan]Fuel Level[/bold cyan]: {latest.get('fuel', '--')} L",
-        f"[bold cyan]Voltage[/bold cyan]: {latest.get('voltage', '--')} V",
-        f"[bold cyan]Engine RPM[/bold cyan]: {latest.get('rpm', '--')}",
-        f"[bold cyan]Heading[/bold cyan]: {latest.get('heading', '--')}° True",
-        f"[bold cyan]Depth[/bold cyan]: {latest.get('depth_m', '--')} m | {latest.get('depth_ft', '--')} ft",
-        f"[bold cyan]Latitude[/bold cyan]: {latest.get('latitude', '--')}",
-        f"[bold cyan]Longitude[/bold cyan]: {latest.get('longitude', '--')}",
+        f"UTC Time: {latest.get('time', '--')}",
+        f"Engine Hours: {latest.get('engine_hours', '--')} hours",
+        f"Engine Temp: {latest.get('engine_temp', '--')} °F",
+        f"Fuel Level: {latest.get('fuel', '--')} L",
+        f"Voltage: {latest.get('voltage', '--')} V",
+        f"Engine RPM: {latest.get('rpm', '--')}",
+        f"Heading: {latest.get('heading', '--')}° True",
+        f"Depth: {latest.get('depth_m', '--')} m | {latest.get('depth_ft', '--')} ft",
+        f"Latitude: {latest.get('latitude', '--')}",
+        f"Longitude: {latest.get('longitude', '--')}",
     ]
 
     # Split into two columns
@@ -166,7 +166,6 @@ def parse_line(line):
                 latest['rpm'] = round(rpm, 1)
         except: pass
 
-
 def listen_nmea2000():
     timeout = 10  # seconds
     with Progress(
@@ -181,24 +180,21 @@ def listen_nmea2000():
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.connect((GATEWAY_HOST, GATEWAY_PORT))
             print("Connected to NMEA 2000 stream...")
-
             while time.time() - start_time < timeout:
                 data = s.recv(1024)
                 #print(data.decode(errors='ignore'))  # or parse_line(data)
                 progress.advance(task, 1)
                 time.sleep(1)  # ensures 1-second pacing
-
         print("✅ Stream closed after 30 seconds.")
 
-        
         # Now decode
         for line in data.decode(errors='ignore').splitlines():
             parse_line(line)
             
+        # Print Panel with results
         console.print(build_panel(latest))
 
-            
-        # Now write
+        # Now write to MQTT
         log_to_mqtt(latest['latitude'],
                 latest['longitude'],
                 latest['engine_hours'],
@@ -208,8 +204,6 @@ def listen_nmea2000():
                 latest['depth_ft'],
                 latest['rpm'])
 
-    
-                
 def convert_latitude_to_dms(lat_str):
     # Example input: "3309.4603N"
     direction = lat_str[-1]
