@@ -14,7 +14,6 @@ import paho.mqtt.client as mqtt
 from dotenv import load_dotenv
 import os
 
-
 console = Console(force_terminal=True)
 
 load_dotenv()  # Loads from .env by default
@@ -23,6 +22,7 @@ MQTT_SERVER = os.getenv("MQTT_SERVER")
 MQTT_SERVER_PORT = int(os.getenv("MQTT_PORT", 1883))
 MQTT_USERNAME = os.getenv("MQTT_USERNAME")
 MQTT_PASSWORD = os.getenv("MQTT_PASSWORD")
+LISTENER_DURATION = os.getenv("LISTENER_DURATION",30)
 
 MQTT_TOPIC =  "sensor/nmea2k"
 MQTT_LOCATION_TOPIC= "autodiscovery/device_tracker/boat_tracker/config"
@@ -175,18 +175,18 @@ def listen_nmea2000():
         "[progress.percentage]{task.percentage:>3.0f}%",
         TimeRemainingColumn(),
     ) as progress:
-        task = progress.add_task("⏳ Listening to NMEA 2000...", total=timeout)
+        task = progress.add_task("⏳ Listening to NMEA 2000...", total=LISTENER_DURATION)
         start_time = time.time()
 
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.connect((GATEWAY_HOST, GATEWAY_PORT))
             print("Connected to NMEA 2000 stream...")
-            while time.time() - start_time < timeout:
+            while time.time() - start_time < LISTENER_DURATION:
                 data = s.recv(1024)
                 #print(data.decode(errors='ignore'))  # or parse_line(data)
                 progress.advance(task, 1)
                 time.sleep(1)  # ensures 1-second pacing
-        print("✅ Stream closed after 30 seconds.")
+        print(f"✅ Stream closed after {LISTENER_DURATION} seconds.")
 
         # Now decode
         for line in data.decode(errors='ignore').splitlines():
