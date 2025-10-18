@@ -185,7 +185,7 @@ def listen_nmea2000():
 
             while time.time() - start_time < timeout:
                 data = s.recv(1024)
-                print(data.decode(errors='ignore'))  # or parse_line(data)
+                #print(data.decode(errors='ignore'))  # or parse_line(data)
                 progress.advance(task, 1)
                 time.sleep(1)  # ensures 1-second pacing
 
