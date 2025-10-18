@@ -130,8 +130,10 @@ def parse_line(line):
 
     elif line.startswith('$YDGGA'):
             try:
-                latest['latitude'] = convert_latitude_to_dms( line.split(',')[2] + line.split(',')[3])
-                latest['longitude'] = convert_longitude_to_dms( line.split(',')[4] + line.split(',')[5])
+                #latest['latitude'] = convert_latitude_to_dms( line.split(',')[2] + line.split(',')[3])
+                latest['latitude'] = line.split(',')[2] 
+                #latest['longitude'] = convert_longitude_to_dms( line.split(',')[4] + line.split(',')[5])
+                latest['longitude'] = line.split(',')[4] 
             except: pass
             
     elif line.startswith('$YDZDA'): 
