@@ -163,13 +163,6 @@ def parse_line(line):
                 latest['rpm'] = round(rpm, 1)
         except: pass
 
-    
-
-def listen_nmea2000():
-    clear_screen()
-    
-    import socket
-import time
 
 def listen_nmea2000():
     timeout = 10  # seconds
