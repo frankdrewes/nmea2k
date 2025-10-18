@@ -101,7 +101,7 @@ def log_to_mqtt(latitude,
         print(f"MQTT #2 publish results -> {mqtt_result2.rc}")
     
     print(f"MQTT publish done")
-    time.sleep(30)
+
     
 def celsius_to_fahrenheit(celsius):
     """Convert Celsius to Fahrenheit."""
