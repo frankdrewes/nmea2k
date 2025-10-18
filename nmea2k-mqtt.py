@@ -22,7 +22,7 @@ MQTT_SERVER = os.getenv("MQTT_SERVER")
 MQTT_SERVER_PORT = int(os.getenv("MQTT_PORT", 1883))
 MQTT_USERNAME = os.getenv("MQTT_USERNAME")
 MQTT_PASSWORD = os.getenv("MQTT_PASSWORD")
-LISTENER_DURATION = os.getenv("LISTENER_DURATION",30)
+LISTENER_DURATION =  int(os.getenv("LISTENER_DURATION",30))
 
 MQTT_TOPIC =  "sensor/nmea2k"
 MQTT_LOCATION_TOPIC= "autodiscovery/device_tracker/boat_tracker/config"
