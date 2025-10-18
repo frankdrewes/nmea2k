@@ -18,7 +18,7 @@ MQTT_SERVER_PORT = int(os.getenv("MQTT_PORT", 1883))
 MQTT_USERNAME = os.getenv("MQTT_USERNAME")
 MQTT_PASSWORD = os.getenv("MQTT_PASSWORD")
 
-MQTT_TOPIC =  "sensor/lancol1"
+MQTT_TOPIC =  "sensor/nmea2k"
 
 GATEWAY_HOST = '192.168.1.53'
 GATEWAY_PORT = 2000
