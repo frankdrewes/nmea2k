@@ -112,7 +112,8 @@ def build_panel(latest):
 
 def celsius_to_fahrenheit(celsius):
     """Convert Celsius to Fahrenheit."""
-    return (celsius * 9 / 5) + 32
+    result= round( (celsius * 9 / 5) + 32,2) # to 2 decimal digits
+    return result
     
 def meters_to_feet(m):
     """Convert Meters to Feet."""
