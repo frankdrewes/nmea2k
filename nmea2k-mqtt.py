@@ -2,6 +2,7 @@ import socket
 import sys
 import time
 from rich.progress import Progress, BarColumn, TextColumn, TimeRemainingColumn
+
 from rich.table import Table
 from rich.console import Console
 import json
@@ -51,7 +52,7 @@ def log_to_mqtt(latitude,
                 depth_ft,
                 engine_rpm
                 ):
-    clear_screen()
+    
     table = Table(title="Engine Telemetry", show_header=False, box=None, pad_edge=False)
     table.add_column("Property", style="bold cyan")
     table.add_column("Value", style="white")
@@ -157,7 +158,44 @@ def parse_line(line):
                 latest['rpm'] = round(rpm, 1)
         except: pass
 
-    log_to_mqtt(latest['latitude'],
+    
+
+def listen_nmea2000():
+    clear_screen()
+    
+    import socket
+import time
+
+def listen_nmea2000():
+    timeout = 30  # seconds
+    with Progress(
+        "[progress.description]{task.description}",
+        BarColumn(),
+        "[progress.percentage]{task.percentage:>3.0f}%",
+        TimeRemainingColumn(),
+    ) as progress:
+        task = progress.add_task("⏳ Listening to NMEA 2000...", total=timeout)
+        start_time = time.time()
+
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.connect((GATEWAY_HOST, GATEWAY_PORT))
+            print("Connected to NMEA 2000 stream...")
+
+            while time.time() - start_time < timeout:
+                data = s.recv(1024)
+                print(data.decode(errors='ignore'))  # or parse_line(data)
+                progress.advance(task, 1)
+                time.sleep(1)  # ensures 1-second pacing
+
+        print("✅ Stream closed after 30 seconds.")
+
+        
+        # Now decode
+        for line in data.decode(errors='ignore').splitlines():
+            parse_line(line)
+            
+        # Now write
+        log_to_mqtt(latest['latitude'],
                 latest['longitude'],
                 latest['engine_hours'],
                 latest['engine_temp'],
@@ -166,16 +204,7 @@ def parse_line(line):
                 latest['depth_ft'],
                 latest['rpm'])
 
-def listen_nmea2000():
-    clear_screen()
     
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.connect((GATEWAY_HOST, GATEWAY_PORT))
-        print("Connected to NMEA 2000 stream...")
-        while True:
-            data = s.recv(1024)
-            for line in data.decode(errors='ignore').splitlines():
-                parse_line(line)
                 
 def convert_latitude_to_dms(lat_str):
     # Example input: "3309.4603N"
@@ -218,4 +247,5 @@ def parse_ydzda(sentence):
     return f"UTC Time: {hour:02d}:{minute:02d}:{second:05.2f} on {year}-{month:02d}-{day:02d}"
 
 if __name__ == "__main__":
+    clear_screen()
     listen_nmea2000()
