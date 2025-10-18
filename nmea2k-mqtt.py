@@ -6,8 +6,7 @@ import time
 from rich.progress import Progress, BarColumn, TextColumn, TimeRemainingColumn
 from rich.panel import Panel
 from rich.text import Text
-
-
+from rich.columns import Columns
 from rich.table import Table
 from rich.console import Console
 import json
@@ -101,11 +100,15 @@ def build_panel(latest):
         f"[bold cyan]Latitude[/bold cyan]: {latest.get('latitude', '--')}",
         f"[bold cyan]Longitude[/bold cyan]: {latest.get('longitude', '--')}",
     ]
-    content = Text("\n".join(lines))
+
+    # Split into two columns
+    midpoint = len(lines) // 2
+    col1 = Text("\n".join(lines[:midpoint]))
+    col2 = Text("\n".join(lines[midpoint:]))
+
+    content = Columns([col1, col2], equal=True, expand=True)
     return Panel(content, title="Engine Telemetry", border_style="green", padding=(1, 2))
 
-
-    
 def celsius_to_fahrenheit(celsius):
     """Convert Celsius to Fahrenheit."""
     return (celsius * 9 / 5) + 32
