@@ -4,6 +4,9 @@ import socket
 import sys
 import time
 from rich.progress import Progress, BarColumn, TextColumn, TimeRemainingColumn
+from rich.panel import Panel
+from rich.text import Text
+
 
 from rich.table import Table
 from rich.console import Console
@@ -54,24 +57,6 @@ def log_to_mqtt(latitude,
                 depth_ft,
                 engine_rpm
                 ):
-    
-    table = Table(title="Engine Telemetry", show_header=False, box=None, pad_edge=False)
-    table.add_column("Property", style="bold cyan")
-    table.add_column("Value", style="white")
-
-    table.add_row("UTC Time", latest.get("time", "--"))
-    table.add_row("Engine Hours", f"{latest.get('engine_hours', '--')} hours")
-    table.add_row("Engine Temp", f"{latest.get('engine_temp', '--')} °F")
-    table.add_row("Fuel Level", f"{latest.get('fuel', '--')} L")
-    table.add_row("Voltage", f"{latest.get('voltage', '--')} V")
-    table.add_row("Engine RPM", f"{latest.get('rpm', '--')}")
-    table.add_row("Heading", f"{latest.get('heading', '--')}° True")
-    table.add_row("Depth", f"{latest.get('depth_m', '--')} m | {latest.get('depth_ft', '--')} ft")
-    table.add_row("Latitude", latest.get("latitude", "--"))
-    table.add_row("Longitude", latest.get("longitude", "--"))
-
-    console.clear()
-    console.print(table)
 
     print(f"Connecting to {MQTT_SERVER}:{MQTT_SERVER_PORT}")
     print(f"writing to MQTT topic {MQTT_TOPIC}")
@@ -101,6 +86,23 @@ def log_to_mqtt(latitude,
         print(f"MQTT #2 publish results -> {mqtt_result2.rc}")
     
     print(f"MQTT publish done")
+    
+def build_panel(latest):
+    lines = [
+        f"[bold cyan]UTC Time[/bold cyan]: {latest.get('time', '--')}",
+        f"[bold cyan]Engine Hours[/bold cyan]: {latest.get('engine_hours', '--')} hours",
+        f"[bold cyan]Engine Temp[/bold cyan]: {latest.get('engine_temp', '--')} °F",
+        f"[bold cyan]Fuel Level[/bold cyan]: {latest.get('fuel', '--')} L",
+        f"[bold cyan]Voltage[/bold cyan]: {latest.get('voltage', '--')} V",
+        f"[bold cyan]Engine RPM[/bold cyan]: {latest.get('rpm', '--')}",
+        f"[bold cyan]Heading[/bold cyan]: {latest.get('heading', '--')}° True",
+        f"[bold cyan]Depth[/bold cyan]: {latest.get('depth_m', '--')} m | {latest.get('depth_ft', '--')} ft",
+        f"[bold cyan]Latitude[/bold cyan]: {latest.get('latitude', '--')}",
+        f"[bold cyan]Longitude[/bold cyan]: {latest.get('longitude', '--')}",
+    ]
+    content = Text("\n".join(lines))
+    return Panel(content, title="Engine Telemetry", border_style="green", padding=(1, 2))
+
 
     
 def celsius_to_fahrenheit(celsius):
@@ -195,6 +197,8 @@ def listen_nmea2000():
         # Now decode
         for line in data.decode(errors='ignore').splitlines():
             parse_line(line)
+            
+        build_panel(latest)
             
         # Now write
         log_to_mqtt(latest['latitude'],
