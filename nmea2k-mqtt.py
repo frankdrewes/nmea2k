@@ -52,27 +52,28 @@ def log_to_mqtt(latitude,
                 longitude,
                 engine_hours,
                 engine_temp,
-                voltage,
                 heading,
                 depth_ft,
-                engine_rpm
+                engine_rpm,
+                voltage
                 ):
 
     print(f"Connecting to {MQTT_SERVER}:{MQTT_SERVER_PORT}")
     print(f"writing to MQTT topic {MQTT_TOPIC}")
     
     payload = {
-    "engine_hours": f"{engine_hours}",
-    "engine_temp": f"{engine_temp}",
-    "heading": f"{heading}",
-    "depth_ft": f"{depth_ft}",
-    "engine_rpm": f"{engine_rpm}",
+        "engine_hours": f"{engine_hours}",
+        "engine_temp": f"{engine_temp}",
+        "heading": f"{heading}",
+        "depth_ft": f"{depth_ft}",
+        "engine_rpm": f"{engine_rpm}",
+        "bus_voltage": f"{voltage}"
                 }
     
     location={
-    "latitude": f"{latitude}",
-    "longitude": f"{longitude}",
-                }
+        "latitude": f"{latitude}",
+        "longitude": f"{longitude}",
+             }
     
     client = mqtt.Client()
     client.username_pw_set(MQTT_USERNAME,MQTT_PASSWORD)
@@ -199,10 +200,11 @@ def listen_nmea2000():
                 latest['longitude'],
                 latest['engine_hours'],
                 latest['engine_temp'],
-                latest['voltage'] ,
                 latest['heading'],
                 latest['depth_ft'],
-                latest['rpm'])
+                latest['rpm'],
+                latest['voltage'] 
+                )
 
 def convert_latitude_to_dms(lat_str):
     # Example input: "3309.4603N"
