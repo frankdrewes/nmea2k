@@ -19,6 +19,7 @@ MQTT_USERNAME = os.getenv("MQTT_USERNAME")
 MQTT_PASSWORD = os.getenv("MQTT_PASSWORD")
 
 MQTT_TOPIC =  "sensor/nmea2k"
+MQTT_LOCATION_TOPIC= "autodiscovery/device_tracker/boat_tracker/config"
 
 GATEWAY_HOST = '192.168.1.53'
 GATEWAY_PORT = 2000
@@ -73,8 +74,6 @@ def log_to_mqtt(latitude,
     print(f"writing to MQTT topic {MQTT_TOPIC}")
     
     payload = {
-    "latitude": f"{latitude}",
-    "longitude": f"{longitude}",
     "engine_hours": f"{engine_hours}",
     "engine_temp": f"{engine_temp}",
     "heading": f"{heading}",
@@ -82,13 +81,21 @@ def log_to_mqtt(latitude,
     "engine_rpm": f"{engine_rpm}",
                 }
     
+    location={
+    "latitude": f"{latitude}",
+    "longitude": f"{longitude}",
+                }
+    
     client = mqtt.Client()
     client.username_pw_set(MQTT_USERNAME,MQTT_PASSWORD)
     client.connect(MQTT_SERVER,int(MQTT_SERVER_PORT), 60)
     mqtt_result= client.publish(MQTT_TOPIC, json.dumps(payload))
+    mqtt_result2 = client.publish(MQTT_LOCATION_TOPIC, json.dumps(location))
     
     if mqtt_result.is_published:
-        print(f"MQTT publish results -> {mqtt_result.rc}")
+        print(f"MQTT #1 publish results -> {mqtt_result.rc}")
+    if mqtt_result2.is_published:
+        print(f"MQTT #2 publish results -> {mqtt_result2.rc}")
     
     print(f"MQTT publish done")
     time.sleep(30)
