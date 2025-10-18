@@ -93,7 +93,12 @@ def log_to_mqtt(latitude,
     print(f"MQTT publish done")
     time.sleep(30)
     
+def celsius_to_fahrenheit(celsius):
+    """Convert Celsius to Fahrenheit."""
+    return (celsius * 9 / 5) + 32
+    
 def meters_to_feet(m):
+    """Convert Meters to Feet."""
     return round(m * 3.28084, 2)
 
 def parse_line(line):
@@ -106,7 +111,7 @@ def parse_line(line):
             except: pass
         elif 'Engine#0' in line and 'Fuel#0' in line and 'Alternator#0' in line:
             try:
-                latest['engine_temp'] = round(float(fields[2]), 1)
+                latest['engine_temp'] = celsius_to_fahrenheit(round(float(fields[2]), 1))
                 latest['fuel'] = 1
                 latest['voltage'] = round(float(fields[10]), 2)
             except: pass
