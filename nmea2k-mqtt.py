@@ -55,9 +55,9 @@ def log_to_mqtt(latitude,
     table.add_column("Property", style="bold cyan")
     table.add_column("Value", style="white")
 
-    table.add_row("LTime", latest.get("time", "--"))
-    table.add_row("Engine Hours", f"{latest.get('engine_hours', '--')} h")
-    table.add_row("Engine Temp", f"{latest.get('engine_temp', '--')} °C")
+    table.add_row("UTC Time", latest.get("time", "--"))
+    table.add_row("Engine Hours", f"{latest.get('engine_hours', '--')} hours")
+    table.add_row("Engine Temp", f"{latest.get('engine_temp', '--')} °F")
     table.add_row("Fuel Level", f"{latest.get('fuel', '--')} L")
     table.add_row("Voltage", f"{latest.get('voltage', '--')} V")
     table.add_row("Engine RPM", f"{latest.get('rpm', '--')}")
@@ -176,7 +176,8 @@ def convert_latitude_to_dms(lat_str):
     minutes_float = float(raw[2:])
     minutes = int(minutes_float)
     seconds = (minutes_float - minutes) * 60
-    return f"{degrees}°{minutes:02d}'{seconds:.1f}\" {direction}"
+    result = f"{degrees}°{minutes:02d}'{seconds:.1f}\" {direction}"
+    return result
 
 def convert_longitude_to_dms(lon_str):
     # Example input: "09659.5216W"
@@ -186,7 +187,8 @@ def convert_longitude_to_dms(lon_str):
     minutes_float = float(raw[3:])
     minutes = int(minutes_float)
     seconds = (minutes_float - minutes) * 60
-    return f"{degrees}°{minutes:02d}'{seconds:.1f}\" {direction}"
+    result = f"{degrees}°{minutes:02d}'{seconds:.1f}\" {direction}"
+    return result
 
 def parse_ydzda(sentence):
     # Example input: "$YDZDA,212636.03,12,10,2025,,*6A"
