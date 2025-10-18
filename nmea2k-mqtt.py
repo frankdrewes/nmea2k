@@ -171,7 +171,7 @@ def listen_nmea2000():
 import time
 
 def listen_nmea2000():
-    timeout = 30  # seconds
+    timeout = 10  # seconds
     with Progress(
         "[progress.description]{task.description}",
         BarColumn(),
@@ -198,7 +198,8 @@ def listen_nmea2000():
         for line in data.decode(errors='ignore').splitlines():
             parse_line(line)
             
-        build_panel(latest)
+        console.print(build_panel(latest))
+
             
         # Now write
         log_to_mqtt(latest['latitude'],
