@@ -26,16 +26,16 @@ GATEWAY_PORT = 2000
 
 # Initialize latest values
 latest = {
-    'latitude': None,
-    'longitude': None,
-    'engine_hours': None,
-    'engine_temp': None,
-    'fuel': None,
-    'voltage': None,
-    'heading': None,
-    'depth_m': None,
-    'depth_ft': None,
-    'rpm': None,
+    'latitude': 0,
+    'longitude': 0,
+    'engine_hours': 0,
+    'engine_temp': 0,
+    'fuel': 0,
+    'voltage': 0,
+    'heading': 0,
+    'depth_m': 0,
+    'depth_ft': 0,
+    'rpm': 0,
     'time': None
 }
 
