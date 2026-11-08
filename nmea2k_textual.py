@@ -5,7 +5,7 @@ from typing import TypeAlias
 from textual import work
 from textual.app import App, ComposeResult
 from textual.containers import Grid, Vertical
-from textual.widgets import Footer, Header, Static
+from textual.widgets import Footer, Header, RichLog, Static
 
 HOST = "192.168.30.163"
 PORT = 2000
@@ -149,6 +149,17 @@ class NmeaDashboard(App[None]):
         padding: 0 2;
         color: $text-muted;
     }
+    #raw-log-title {
+        padding: 0 2;
+        text-style: bold;
+        color: $accent;
+    }
+    #raw-log {
+        height: 10;
+        margin: 0 2 1;
+        border: round $primary;
+        padding: 0 1;
+    }
     """
 
     def __init__(self) -> None:
@@ -193,6 +204,8 @@ class NmeaDashboard(App[None]):
                 yield Static("Pitch: --", id="pitch", classes="reading")
                 yield Static("Roll: --", id="roll", classes="reading")
         yield Static("Connecting...", id="connection-status")
+        yield Static("Raw network data", id="raw-log-title")
+        yield RichLog(id="raw-log", wrap=True, max_lines=200)
         yield Footer()
 
     def on_mount(self) -> None:
@@ -215,6 +228,7 @@ class NmeaDashboard(App[None]):
                     line = data.decode(errors="replace").strip()
                     if not line:
                         continue
+                    self.query_one("#raw-log", RichLog).write(line)
                     try:
                         if parse_line(line, self.latest):
                             self._update_readings()
