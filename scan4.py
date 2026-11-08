@@ -1,143 +1,197 @@
+﻿#!/usr/bin/env python3
+
+import argparse
 import socket
-import sys
 import time
+from typing import Any
 
-HOST = '192.168.1.53'
-PORT = 2000
+from dotenv import load_dotenv
+from rich.align import Align
+from rich.columns import Columns
+from rich.console import Console
+from rich.live import Live
+from rich.panel import Panel
+from rich.table import Table
 
-# Initialize latest values
-latest = {
-    'latitude': None,
-    'longitude': None,
-    'engine_hours': None,
-    'engine_temp': None,
-    'fuel': None,
-    'voltage': None,
-    'heading': None,
-    'depth_m': None,
-    'depth_ft': None,
-    'rpm': None,
-    'time': None
-}
+load_dotenv()
 
-def meters_to_feet(m):
-    return round(m * 3.28084, 2)
+DEFAULT_HOST = "192.168.30.163"
+DEFAULT_PORT = 2000
+DEFAULT_DURATION = 60
 
-def print_status():
-    #sys.stdout.write("\033[H\033[J")  # Clear screen
-    print(f"LTime          : {latest['time']or '--'}")  
-    print(f"Engine Hours   : {latest['engine_hours'] or '--'} h")
-    print(f"Engine Temp    : {latest['engine_temp'] or '--'} °C")
-    print(f"Fuel Level     : {latest['fuel'] or '--'} L")
-    print(f"Voltage        : {latest['voltage'] or '--'} V")
-    print(f"Engine RPM     : {latest['rpm'] or '--'}")
-    print(f"Heading        : {latest['heading'] or '--'}° True")
-    print(f"Depth          : {latest['depth_m'] or '--'} m | {latest['depth_ft'] or '--'} ft")
-    print(f"Latitude       : {latest['latitude']or '--'}")
-    print(f"Longitude      : {latest['longitude']or '--'}")    
-    print("-" * 40)
-    time.sleep(30)
+console = Console(force_terminal=True)
 
-def parse_line(line):
-    if line.startswith('$YDXDR'):
-        fields = line.split(',')
-        print(f"fields0 -{fields}")
-        if 'EngineHours#0' in line:
+
+def value_or_default(value: Any, default: str = "--") -> str:
+    return default if value in (None, "") else str(value)
+
+
+def celsius_to_fahrenheit(celsius: float) -> float:
+    return round((celsius * 9 / 5) + 32, 2)
+
+
+def meters_to_feet(meters: float) -> float:
+    return round(meters * 3.28084, 2)
+
+
+def normalize_float(value: str) -> float | None:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def parse_ydzda(sentence: str) -> str:
+    parts = sentence.split(",")
+    if len(parts) < 5:
+        return "--"
+    try:
+        time_raw = parts[1]
+        day = int(parts[2])
+        month = int(parts[3])
+        year = int(parts[4])
+        hour = int(time_raw[:2])
+        minute = int(time_raw[2:4])
+        second = float(time_raw[4:])
+        return f"{year}-{month:02d}-{day:02d} {hour:02d}:{minute:02d}:{second:05.2f}Z"
+    except (TypeError, ValueError):
+        return "--"
+
+
+def parse_line(line: str, telemetry: dict[str, Any]) -> None:
+    if not line or not line.startswith("$"):
+        return
+
+    if line.startswith("$YDXDR"):
+        fields = line.split(",")
+        if "EngineHours#0" in line and len(fields) > 2:
+            value = normalize_float(fields[2])
+            if value is not None:
+                telemetry["engine_hours"] = round(value, 2)
+        elif "Engine#0" in line and "Fuel#0" in line and "Alternator#0" in line:
+            temp_value = normalize_float(fields[2]) if len(fields) > 2 else None
+            voltage_value = normalize_float(fields[10]) if len(fields) > 10 else None
+            if temp_value is not None:
+                telemetry["engine_temp"] = round(celsius_to_fahrenheit(temp_value), 2)
+            if voltage_value is not None:
+                telemetry["voltage"] = round(voltage_value, 2)
+            if telemetry.get("fuel") is None:
+                telemetry["fuel"] = 1
+
+    elif line.startswith("$YDHDG"):
+        heading = normalize_float(line.split(",")[1])
+        if heading is not None:
+            telemetry["heading"] = round(heading, 1)
+
+    elif line.startswith("$YDDBT") or line.startswith("$IIDBT") or line.startswith("$SDDBT"):
+        fields = line.split(",")
+        if len(fields) >= 5:
+            unit = fields[2].upper() if len(fields) > 2 else ""
+            depth_m = normalize_float(fields[3]) if unit == "M" else None
+            depth_ft = normalize_float(fields[1]) if unit in {"F", "FT"} else None
+            if depth_m is not None:
+                telemetry["depth_m"] = round(depth_m, 2)
+                telemetry["depth_ft"] = round(meters_to_feet(depth_m), 2)
+            elif depth_ft is not None:
+                telemetry["depth_ft"] = round(depth_ft, 2)
+                telemetry["depth_m"] = round(depth_ft / 3.28084, 2)
+
+    elif line.startswith("$YDGGA"):
+        fields = line.split(",")
+        if len(fields) >= 6:
+            telemetry["latitude"] = fields[2]
+            telemetry["longitude"] = fields[4]
+
+    elif line.startswith("$YDZDA"):
+        telemetry["time"] = parse_ydzda(line)
+
+    elif line.startswith("$PCDIN") and "01F201" in line:
+        parts = line.split(",")
+        if len(parts) >= 5:
+            hexdata = parts[4].strip().split("*")[0]
             try:
-                latest['engine_hours'] = round(float(fields[2]), 2)
-                print(f"fields1 -{fields}")
-            except: pass
-        elif 'Engine#0' in line and 'Fuel#0' in line and 'Alternator#0' in line:
-            try:
-                print(f"fields2 -{fields}")
-                latest['engine_temp'] = round(float(fields[2]), 1)
-                latest['fuel'] = 1
-                latest['voltage'] = round(float(fields[10]), 2)
-            except: pass
-
-    elif line.startswith('$YDHDG'):
-        try:
-            latest['heading'] = round(float(line.split(',')[1]), 1)
-        except: pass
-
-    elif line.startswith('$YDDBT'):
-        try:
-            depth = float(line.split(',')[1])
-            latest['depth_m'] = round(float(line.split(',')[3]),2)
-            latest['depth_ft'] = round(float(line.split(',')[1]), 3)
-        except: pass
-
-    elif line.startswith('$YDGGA'):
-            try:
-                
-                latest['latitude'] = convert_latitude_to_dms( line.split(',')[2] + line.split(',')[3])
-                latest['longitude'] = convert_longitude_to_dms( line.split(',')[4] + line.split(',')[5])
-            except: pass
-            
-    elif line.startswith('$YDZDA'): 
-            try:
-                latest['time'] = parse_ydzda(line)
-            except: pass
-
-    elif line.startswith('$PCDIN') and '01F201' in line:
-        try:
-            hexdata = line.split(',')[4].strip().split('*')[0]
-            rpm_bytes = bytes.fromhex(hexdata)
+                rpm_bytes = bytes.fromhex(hexdata)
+            except ValueError:
+                return
             if len(rpm_bytes) >= 7:
-                rpm = int.from_bytes(rpm_bytes[3:7], byteorder='little') / 4.0
-                latest['rpm'] = round(rpm, 1)
-        except: pass
+                rpm = int.from_bytes(rpm_bytes[3:7], byteorder="little") / 4.0
+                telemetry["rpm"] = round(rpm, 1)
 
-    print_status()
 
-def listen_nmea2000():
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.connect((HOST, PORT))
-        print("Connected to NMEA 2000 stream...")
-        while True:
-            data = s.recv(1024)
-            for line in data.decode(errors='ignore').splitlines():
-                parse_line(line)
-                
-def convert_latitude_to_dms(lat_str):
-    # Example input: "3309.4603N"
-    direction = lat_str[-1]
-    raw = lat_str[:-1]
-    degrees = int(raw[:2])
-    minutes_float = float(raw[2:])
-    minutes = int(minutes_float)
-    seconds = (minutes_float - minutes) * 60
-    return f"{degrees}°{minutes:02d}'{seconds:.1f}\" {direction}"
+def build_dashboard(telemetry: dict[str, Any]) -> Panel:
+    engine_table = Table.grid(expand=True)
+    engine_table.add_column(style="bold cyan")
+    engine_table.add_column(justify="right")
+    engine_table.add_row("Engine hours", value_or_default(telemetry.get("engine_hours"), "--"))
+    engine_table.add_row("Engine temp", f"{value_or_default(telemetry.get('engine_temp'), '--')} °F")
+    engine_table.add_row("Fuel", f"{value_or_default(telemetry.get('fuel'), '--')} L")
+    engine_table.add_row("Voltage", f"{value_or_default(telemetry.get('voltage'), '--')} V")
+    engine_table.add_row("RPM", value_or_default(telemetry.get("rpm"), "--"))
 
-def convert_longitude_to_dms(lon_str):
-    # Example input: "09659.5216W"
-    direction = lon_str[-1]
-    raw = lon_str[:-1]
-    degrees = int(raw[:3])
-    minutes_float = float(raw[3:])
-    minutes = int(minutes_float)
-    seconds = (minutes_float - minutes) * 60
-    return f"{degrees}°{minutes:02d}'{seconds:.1f}\" {direction}"
+    nav_table = Table.grid(expand=True)
+    nav_table.add_column(style="bold cyan")
+    nav_table.add_column(justify="right")
+    nav_table.add_row("UTC time", value_or_default(telemetry.get("time"), "--"))
+    nav_table.add_row("Heading", f"{value_or_default(telemetry.get('heading'), '--')}° True")
+    nav_table.add_row("Depth", f"{value_or_default(telemetry.get('depth_m'), '--')} m / {value_or_default(telemetry.get('depth_ft'), '--')} ft")
+    nav_table.add_row("Latitude", value_or_default(telemetry.get("latitude"), "--"))
+    nav_table.add_row("Longitude", value_or_default(telemetry.get("longitude"), "--"))
 
-def parse_ydzda(sentence):
-    # Example input: "$YDZDA,212636.03,12,10,2025,,*6A"
-    parts = sentence.split(',')
+    columns = Columns(
+        [
+            Panel(engine_table, title="Engine", border_style="green"),
+            Panel(nav_table, title="Navigation", border_style="blue"),
+        ],
+        expand=True,
+    )
+    return Panel(Align.center(columns), title="NMEA 2000 Live Monitor", border_style="bold cyan")
 
-    # Extract time and date components
-    time_raw = parts[1]  # HHMMSS.ss
-    day = int(parts[2])
-    month = int(parts[3])
-    year = int(parts[4])
 
-    # Parse time
-    hour = int(time_raw[:2])
-    minute = int(time_raw[2:4])
-    second = float(time_raw[4:])
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Display live NMEA 2000 telemetry from a Yacht Devices gateway.")
+    parser.add_argument("--host", default=DEFAULT_HOST, help="Gateway host IP (default: %(default)s)")
+    parser.add_argument("--port", type=int, default=DEFAULT_PORT, help="Gateway port (default: %(default)s)")
+    parser.add_argument("--seconds", type=float, default=DEFAULT_DURATION, help="How long to display live data before exiting")
+    args = parser.parse_args()
 
-    # Format output
-    return f"UTC Time: {hour:02d}:{minute:02d}:{second:05.2f} on {year}-{month:02d}-{day:02d}"
+    telemetry: dict[str, Any] = {
+        "latitude": None,
+        "longitude": None,
+        "engine_hours": None,
+        "engine_temp": None,
+        "fuel": None,
+        "voltage": None,
+        "heading": None,
+        "depth_m": None,
+        "depth_ft": None,
+        "rpm": None,
+        "time": None,
+    }
 
+    with Live(build_dashboard(telemetry), auto_refresh=False, console=console, refresh_per_second=4) as live:
+        deadline = time.monotonic() + args.seconds
+        while time.monotonic() < deadline:
+            try:
+                with socket.create_connection((args.host, args.port), timeout=2.0) as sock:
+                    sock.settimeout(1.0)
+                    while time.monotonic() < deadline:
+                        try:
+                            chunk = sock.recv(4096)
+                        except socket.timeout:
+                            continue
+                        if not chunk:
+                            break
+                        for line in chunk.decode("utf-8", errors="ignore").splitlines():
+                            clean = line.strip()
+                            if clean:
+                                parse_line(clean, telemetry)
+                        live.update(build_dashboard(telemetry))
+            except OSError:
+                live.update(Panel(f"Waiting for gateway at {args.host}:{args.port}...", title="Connection", border_style="yellow"))
+                time.sleep(2.0)
+
+    return 0
 
 
 if __name__ == "__main__":
-    listen_nmea2000()
+    raise SystemExit(main())
