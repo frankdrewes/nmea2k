@@ -36,6 +36,26 @@ def celsius_to_fahrenheit(celsius: float) -> float:
     return round((celsius * 9 / 5) + 32, 1)
 
 
+def decode_fluid_level(payload_hex: str) -> dict[str, int | float]:
+    """Decode tank metadata and percentage from a PGN 127505 payload."""
+    payload = bytes.fromhex(payload_hex)
+    if len(payload) < 3:
+        raise ValueError("PGN 127505 payload must contain at least 3 bytes")
+
+    tank_instance = payload[0]
+    fluid_type = payload[1] & 0x0F
+    tank_number = (payload[1] >> 4) & 0x0F
+    level_raw = (payload[2] << 8) | payload[1]
+
+    return {
+        "tank_instance": tank_instance,
+        "fluid_type": fluid_type,
+        "tank_number": tank_number,
+        "level_raw": level_raw,
+        "level_percent": level_raw * 0.004,
+    }
+
+
 def parse_line(line: str, latest: LatestValues) -> bool:
     """Update the requested telemetry values from one NMEA sentence."""
     if line.startswith("$YDXDR"):
@@ -47,7 +67,7 @@ def parse_line(line: str, latest: LatestValues) -> bool:
         if all(name in line for name in ("Engine#0", "Fuel#0", "Alternator#0")):
             engine_temp = celsius_to_fahrenheit(float(fields[2]))
             voltage = round(float(fields[10]), 2)
-            latest.update(engine_temp=engine_temp, fuel=1, voltage=voltage)
+            latest.update(engine_temp=engine_temp, voltage=voltage)
             return True
 
     elif line.startswith("$YDHDG"):
@@ -65,6 +85,20 @@ def parse_line(line: str, latest: LatestValues) -> bool:
         latitude = convert_latitude_to_dms(fields[2] + fields[3])
         longitude = convert_longitude_to_dms(fields[4] + fields[5])
         latest.update(latitude=latitude, longitude=longitude)
+        return True
+
+    elif line.startswith("$PCDIN") and "01F211" in line:
+        hexdata = line.split(",")[4].strip().split("*")[0]
+        fuel = decode_fluid_level(hexdata)
+        latest["fuel"] = round(fuel["level_percent"], 1)
+        latest["fuel_tank_number"] = fuel["tank_number"]
+        return True
+
+    elif line.startswith("$MXPGN") and "01F211" in line:
+        hexdata = line.split(",")[3].strip().split("*")[0]
+        fuel = decode_fluid_level(hexdata)
+        latest["fuel"] = round(fuel["level_percent"], 1)
+        latest["fuel_tank_number"] = fuel["tank_number"]
         return True
 
     elif line.startswith("$PCDIN") and "01F201" in line:
@@ -114,6 +148,7 @@ class NmeaDashboard(App[None]):
             "engine_temp": None,
             "engine_hours": None,
             "fuel": None,
+            "fuel_tank_number": None,
             "voltage": None,
             "latitude": None,
             "longitude": None,
@@ -191,7 +226,10 @@ class NmeaDashboard(App[None]):
             "rpm": f"RPM: {values['rpm'] if values['rpm'] is not None else '--'}",
             "engine-temp": f"Engine temp: {values['engine_temp'] if values['engine_temp'] is not None else '--'} °F",
             "engine-hours": f"Engine hours: {values['engine_hours'] if values['engine_hours'] is not None else '--'} h",
-            "fuel": f"Fuel: {values['fuel'] if values['fuel'] is not None else '--'} L",
+            "fuel": (
+                f"Fuel: {values['fuel'] if values['fuel'] is not None else '--'}% "
+                f"(Tank {values['fuel_tank_number'] if values['fuel_tank_number'] is not None else '--'})"
+            ),
             "voltage": f"Voltage: {values['voltage'] if values['voltage'] is not None else '--'} V",
             "latitude": f"Latitude: {values['latitude'] if values['latitude'] is not None else '--'}",
             "longitude": f"Longitude: {values['longitude'] if values['longitude'] is not None else '--'}",

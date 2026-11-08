@@ -37,6 +37,7 @@ latest = {
     'engine_hours': None,
     'engine_temp': None,
     'fuel': None,
+    'fuel_tank_number': None,
     'voltage': None,
     'heading': None,
     'depth_m': None,
@@ -55,7 +56,8 @@ def log_to_mqtt(latitude,
                 heading,
                 depth_ft,
                 engine_rpm,
-                voltage
+                voltage,
+                fuel_level_percent
                 ):
 
     print(f"Connecting to {MQTT_SERVER}:{MQTT_SERVER_PORT}")
@@ -67,7 +69,8 @@ def log_to_mqtt(latitude,
         "heading": f"{heading}",
         "depth_ft": f"{depth_ft}",
         "engine_rpm": f"{engine_rpm}",
-        "bus_voltage": f"{voltage}"
+        "bus_voltage": f"{voltage}",
+        "fuel_level_percent": fuel_level_percent
                 }
     
     location={
@@ -93,7 +96,7 @@ def build_panel(latest):
         f"UTC Time: {latest.get('time', '--')}",
         f"Engine Hours: {latest.get('engine_hours', '--')} hours",
         f"Engine Temp: {latest.get('engine_temp', '--')} °F",
-        f"Fuel Level: {latest.get('fuel', '--')} L",
+        f"Fuel Level: {latest.get('fuel', '--')}% (Tank {latest.get('fuel_tank_number', '--')})",
         f"Voltage: {latest.get('voltage', '--')} V",
         f"Engine RPM: {latest.get('rpm', '--')}",
         f"Heading: {latest.get('heading', '--')}° True",
@@ -119,6 +122,25 @@ def meters_to_feet(m):
     """Convert Meters to Feet."""
     return round(m * 3.28084, 2)
 
+def decode_fluid_level(payload_hex):
+    """Decode tank metadata and percentage from a PGN 127505 payload."""
+    payload = bytes.fromhex(payload_hex)
+    if len(payload) < 3:
+        raise ValueError("PGN 127505 payload must contain at least 3 bytes")
+
+    tank_instance = payload[0]
+    fluid_type = payload[1] & 0x0F
+    tank_number = (payload[1] >> 4) & 0x0F
+    level_raw = (payload[2] << 8) | payload[1]
+
+    return {
+        "tank_instance": tank_instance,
+        "fluid_type": fluid_type,
+        "tank_number": tank_number,
+        "level_raw": level_raw,
+        "level_percent": level_raw * 0.004,
+    }
+
 def parse_line(line):
     if line.startswith('$YDXDR'):
         fields = line.split(',')
@@ -130,7 +152,6 @@ def parse_line(line):
         elif 'Engine#0' in line and 'Fuel#0' in line and 'Alternator#0' in line:
             try:
                 latest['engine_temp'] = celsius_to_fahrenheit(round(float(fields[2]), 1))
-                latest['fuel'] = 1
                 latest['voltage'] = round(float(fields[10]), 2)
             except: pass
 
@@ -158,6 +179,24 @@ def parse_line(line):
             try:
                 latest['time'] = parse_ydzda(line)
             except: pass
+
+    elif line.startswith('$PCDIN') and '01F211' in line:
+        try:
+            hexdata = line.split(',')[4].strip().split('*')[0]
+            fuel = decode_fluid_level(hexdata)
+            latest['fuel'] = round(fuel['level_percent'], 1)
+            latest['fuel_tank_number'] = fuel['tank_number']
+        except (IndexError, ValueError):
+            pass
+
+    elif line.startswith('$MXPGN') and '01F211' in line:
+        try:
+            hexdata = line.split(',')[3].strip().split('*')[0]
+            fuel = decode_fluid_level(hexdata)
+            latest['fuel'] = round(fuel['level_percent'], 1)
+            latest['fuel_tank_number'] = fuel['tank_number']
+        except (IndexError, ValueError):
+            pass
 
     elif line.startswith('$PCDIN') and '01F201' in line:
         try:
@@ -204,7 +243,8 @@ def listen_nmea2000():
                 latest['heading'],
                 latest['depth_ft'],
                 latest['rpm'],
-                latest['voltage'] 
+                latest['voltage'],
+                latest['fuel']
                 )
 
 def convert_latitude_to_dms(lat_str):
