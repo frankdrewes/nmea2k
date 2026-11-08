@@ -7,7 +7,7 @@ from textual.app import App, ComposeResult
 from textual.containers import Grid, Vertical
 from textual.widgets import Footer, Header, Static
 
-HOST = "192.168.1.53"
+HOST = "192.168.30.163"
 PORT = 2000
 RECONNECT_DELAY = 5
 
