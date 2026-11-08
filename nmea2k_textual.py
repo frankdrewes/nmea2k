@@ -156,7 +156,7 @@ class NmeaDashboard(App[None]):
     }
     #raw-log {
         height: 10;
-        margin: 0 2 1;
+        margin: 0 2 1 2;
         border: round $primary;
         padding: 0 1;
     }
