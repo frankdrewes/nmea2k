@@ -75,16 +75,16 @@ def log_to_mqtt(latitude,
         "longitude": f"{longitude}",
              }
     
-    client = mqtt.Client()
+    client = mqtt.Client(callback_api_version=mqtt.CallbackAPIVersion.VERSION2)
     client.username_pw_set(MQTT_USERNAME,MQTT_PASSWORD)
     client.connect(MQTT_SERVER,int(MQTT_SERVER_PORT), 60)
     mqtt_result= client.publish(MQTT_TOPIC, json.dumps(payload))
     mqtt_result2 = client.publish(MQTT_LOCATION_TOPIC, json.dumps(location))
     
     if mqtt_result.is_published:
-        print(f"MQTT #1 publish results -> {mqtt_result.rc}")
+        print(f"MQTT #1 publish to {MQTT_SERVER}:{MQTT_SERVER_PORT} -> {mqtt_result.rc}")
     if mqtt_result2.is_published:
-        print(f"MQTT #2 publish results -> {mqtt_result2.rc}")
+        print(f"MQTT #2 publish to {MQTT_SERVER}:{MQTT_SERVER_PORT} -> {mqtt_result2.rc}")
     
     print(f"MQTT publish done")
     
@@ -181,7 +181,7 @@ def listen_nmea2000():
 
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.connect((GATEWAY_HOST, GATEWAY_PORT))
-            print("Connected to NMEA 2000 stream...")
+            print(f"Connected to NMEA 2000 stream at {GATEWAY_HOST}:{GATEWAY_PORT}")
             while time.time() - start_time < LISTENER_DURATION:
                 data = s.recv(1024)
                 #print(data.decode(errors='ignore'))  # or parse_line(data)

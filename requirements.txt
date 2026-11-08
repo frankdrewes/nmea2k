@@ -1,4 +1,4 @@
 rich
 python-dotenv
 textual
-textual
+paho-mqtt
