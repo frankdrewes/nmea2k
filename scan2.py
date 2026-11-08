@@ -1,6 +1,6 @@
 import socket
 
-HOST = '192.168.1.53'  # IP of the gateway
+HOST = '192.168.30.163'  # IP of the gateway
 PORT = 2000           # TCP port
 
 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:

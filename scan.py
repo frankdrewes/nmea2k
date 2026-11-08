@@ -2,7 +2,7 @@ import socket
 import struct
 
 # Gateway connection settings
-HOST = '192.168.1.53'  # Replace with your gateway IP
+HOST = '192.168.30.163'  # Replace with your gateway IP
 PORT = 2000            # TCP port for NMEA 2000 stream
 
 def parse_pgn_128267(data):

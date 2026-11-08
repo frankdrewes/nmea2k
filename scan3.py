@@ -1,6 +1,6 @@
 import socket
 
-HOST = '192.168.1.53'  # Updated IP of the gateway
+HOST = '192.168.30.163'  # Updated IP of the gateway
 PORT = 2000            # Updated TCP port
 
 def meters_to_feet(meters):
