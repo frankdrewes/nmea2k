@@ -124,6 +124,7 @@ def parse_line(line: str, latest: LatestValues) -> bool:
 
 class NmeaDashboard(App[None]):
     TITLE = "NMEA 2000 Telemetry"
+    BINDINGS = [("p", "toggle_log_pause", "Pause/resume raw log")]
     CSS = """
     #dashboard {
         grid-size: 2 2;
@@ -155,7 +156,7 @@ class NmeaDashboard(App[None]):
         color: $accent;
     }
     #raw-log {
-        height: 10;
+        height: 20;
         margin: 0 2 1 2;
         border: round $primary;
         padding: 0 1;
@@ -164,6 +165,7 @@ class NmeaDashboard(App[None]):
 
     def __init__(self) -> None:
         super().__init__()
+        self.log_paused = False
         self.latest: LatestValues = {
             "rpm": None,
             "engine_temp": None,
@@ -228,7 +230,8 @@ class NmeaDashboard(App[None]):
                     line = data.decode(errors="replace").strip()
                     if not line:
                         continue
-                    self.query_one("#raw-log", RichLog).write(line)
+                    if not self.log_paused:
+                        self.query_one("#raw-log", RichLog).write(line)
                     try:
                         if parse_line(line, self.latest):
                             self._update_readings()
@@ -246,6 +249,11 @@ class NmeaDashboard(App[None]):
 
             if self.is_running:
                 await asyncio.sleep(RECONNECT_DELAY)
+
+    def action_toggle_log_pause(self) -> None:
+        self.log_paused = not self.log_paused
+        state = "PAUSED — press P to resume" if self.log_paused else "Live — press P to pause"
+        self.query_one("#raw-log-title", Static).update(f"Raw network data ({state})")
 
     def _set_connection_status(self, message: str) -> None:
         self.query_one("#connection-status", Static).update(message)
