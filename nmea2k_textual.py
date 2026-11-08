@@ -32,6 +32,10 @@ def _convert_coordinate_to_dms(coordinate: str, degree_digits: int) -> str:
     return f'{degrees}°{minutes:02d}\'{seconds:.1f}" {direction}'
 
 
+def celsius_to_fahrenheit(celsius: float) -> float:
+    return round((celsius * 9 / 5) + 32, 1)
+
+
 def parse_line(line: str, latest: LatestValues) -> bool:
     """Update the requested telemetry values from one NMEA sentence."""
     if line.startswith("$YDXDR"):
@@ -41,7 +45,7 @@ def parse_line(line: str, latest: LatestValues) -> bool:
             latest["engine_hours"] = engine_hours
             return True
         if all(name in line for name in ("Engine#0", "Fuel#0", "Alternator#0")):
-            engine_temp = round(float(fields[2]), 1)
+            engine_temp = celsius_to_fahrenheit(float(fields[2]))
             voltage = round(float(fields[10]), 2)
             latest.update(engine_temp=engine_temp, fuel=1, voltage=voltage)
             return True
@@ -185,7 +189,7 @@ class NmeaDashboard(App[None]):
         values = self.latest
         readings = {
             "rpm": f"RPM: {values['rpm'] if values['rpm'] is not None else '--'}",
-            "engine-temp": f"Engine temp: {values['engine_temp'] if values['engine_temp'] is not None else '--'} °C",
+            "engine-temp": f"Engine temp: {values['engine_temp'] if values['engine_temp'] is not None else '--'} °F",
             "engine-hours": f"Engine hours: {values['engine_hours'] if values['engine_hours'] is not None else '--'} h",
             "fuel": f"Fuel: {values['fuel'] if values['fuel'] is not None else '--'} L",
             "voltage": f"Voltage: {values['voltage'] if values['voltage'] is not None else '--'} V",
