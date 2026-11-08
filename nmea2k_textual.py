@@ -60,6 +60,10 @@ def parse_line(line: str, latest: LatestValues) -> bool:
     """Update the requested telemetry values from one NMEA sentence."""
     if line.startswith("$YDXDR"):
         fields = line.split(",")
+        for index in range(1, len(fields) - 3, 4):
+            name = fields[index + 3].split("*")[0]
+            if name in ("Pitch", "Roll"):
+                latest[name.lower()] = round(float(fields[index + 1]), 2)
         if "EngineHours#0" in line:
             engine_hours = round(float(fields[2]), 2)
             latest["engine_hours"] = engine_hours
@@ -73,6 +77,12 @@ def parse_line(line: str, latest: LatestValues) -> bool:
     elif line.startswith("$YDHDG"):
         latest["heading"] = round(float(line.split(",")[1]), 1)
         return True
+
+    elif line.startswith("$YDROT"):
+        fields = line.split(",")
+        if fields[2].split("*")[0] == "A":
+            latest["rate_of_turn"] = round(float(fields[1]), 1)
+            return True
 
     elif line.startswith("$YDDBT"):
         fields = line.split(",")
@@ -154,6 +164,9 @@ class NmeaDashboard(App[None]):
             "longitude": None,
             "depth_ft": None,
             "heading": None,
+            "rate_of_turn": None,
+            "pitch": None,
+            "roll": None,
         }
 
     def compose(self) -> ComposeResult:
@@ -176,6 +189,9 @@ class NmeaDashboard(App[None]):
                 yield Static("Longitude: --", id="longitude", classes="reading")
                 yield Static("Depth: --", id="depth-ft", classes="reading")
                 yield Static("Heading: --", id="heading", classes="reading")
+                yield Static("Rate of Turn: --", id="rate-of-turn", classes="reading")
+                yield Static("Pitch: --", id="pitch", classes="reading")
+                yield Static("Roll: --", id="roll", classes="reading")
         yield Static("Connecting...", id="connection-status")
         yield Footer()
 
@@ -222,6 +238,15 @@ class NmeaDashboard(App[None]):
 
     def _update_readings(self) -> None:
         values = self.latest
+        rate_of_turn = values["rate_of_turn"]
+        if rate_of_turn is None:
+            rate_of_turn_text = "--"
+        elif rate_of_turn < 0:
+            rate_of_turn_text = f"{abs(rate_of_turn):.1f}°/min to port"
+        elif rate_of_turn > 0:
+            rate_of_turn_text = f"{rate_of_turn:.1f}°/min to starboard"
+        else:
+            rate_of_turn_text = "0.0°/min"
         readings = {
             "rpm": f"RPM: {values['rpm'] if values['rpm'] is not None else '--'}",
             "engine-temp": f"Engine temp: {values['engine_temp'] if values['engine_temp'] is not None else '--'} °F",
@@ -235,6 +260,9 @@ class NmeaDashboard(App[None]):
             "longitude": f"Longitude: {values['longitude'] if values['longitude'] is not None else '--'}",
             "depth-ft": f"Depth: {values['depth_ft'] if values['depth_ft'] is not None else '--'} ft",
             "heading": f"Heading: {values['heading'] if values['heading'] is not None else '--'}°",
+            "rate-of-turn": f"Rate of Turn: {rate_of_turn_text}",
+            "pitch": f"Pitch: {values['pitch'] if values['pitch'] is not None else '--'}°",
+            "roll": f"Roll: {values['roll'] if values['roll'] is not None else '--'}°",
         }
         for widget_id, text in readings.items():
             self.query_one(f"#{widget_id}", Static).update(text)

@@ -43,6 +43,9 @@ latest = {
     'depth_m': None,
     'depth_ft': None,
     'rpm': None,
+    'rate_of_turn': None,
+    'pitch': None,
+    'roll': None,
     'time': None
 }
 
@@ -57,7 +60,10 @@ def log_to_mqtt(latitude,
                 depth_ft,
                 engine_rpm,
                 voltage,
-                fuel_level_percent
+                fuel_level_percent,
+                rate_of_turn,
+                pitch,
+                roll
                 ):
 
     print(f"Connecting to {MQTT_SERVER}:{MQTT_SERVER_PORT}")
@@ -70,7 +76,10 @@ def log_to_mqtt(latitude,
         "depth_ft": f"{depth_ft}",
         "engine_rpm": f"{engine_rpm}",
         "bus_voltage": f"{voltage}",
-        "fuel_level_percent": fuel_level_percent
+        "fuel_level_percent": fuel_level_percent,
+        "rate_of_turn_deg_per_min": rate_of_turn,
+        "pitch_degrees": pitch,
+        "roll_degrees": roll
                 }
     
     location={
@@ -100,6 +109,9 @@ def build_panel(latest):
         f"Voltage: {latest.get('voltage', '--')} V",
         f"Engine RPM: {latest.get('rpm', '--')}",
         f"Heading: {latest.get('heading', '--')}° True",
+        f"Rate of Turn: {format_rate_of_turn(latest.get('rate_of_turn'))}",
+        f"Pitch: {format_angle(latest.get('pitch'))}",
+        f"Roll: {format_angle(latest.get('roll'))}",
         f"Depth: {latest.get('depth_m', '--')} m | {latest.get('depth_ft', '--')} ft",
         f"Latitude: {latest.get('latitude', '--')}",
         f"Longitude: {latest.get('longitude', '--')}",
@@ -112,6 +124,18 @@ def build_panel(latest):
 
     content = Columns([col1, col2], equal=True, expand=True)
     return Panel(content, title="Engine Telemetry", border_style="green", padding=(1, 2))
+
+def format_rate_of_turn(rate):
+    if rate is None:
+        return "--"
+    if rate < 0:
+        return f"{abs(rate):.1f}°/min to port"
+    if rate > 0:
+        return f"{rate:.1f}°/min to starboard"
+    return "0.0°/min"
+
+def format_angle(angle):
+    return "--" if angle is None else f"{angle:.2f}°"
 
 def celsius_to_fahrenheit(celsius):
     """Convert Celsius to Fahrenheit."""
@@ -144,6 +168,13 @@ def decode_fluid_level(payload_hex):
 def parse_line(line):
     if line.startswith('$YDXDR'):
         fields = line.split(',')
+        for index in range(1, len(fields) - 3, 4):
+            name = fields[index + 3].split('*')[0]
+            if name in ('Pitch', 'Roll'):
+                try:
+                    latest[name.lower()] = round(float(fields[index + 1]), 2)
+                except ValueError:
+                    pass
         print(f"fields0 -{fields}")
         if 'EngineHours#0' in line:
             try:
@@ -159,6 +190,14 @@ def parse_line(line):
         try:
             latest['heading'] = round(float(line.split(',')[1]), 1)
         except: pass
+
+    elif line.startswith('$YDROT'):
+        try:
+            fields = line.split(',')
+            if fields[2].split('*')[0] == 'A':
+                latest['rate_of_turn'] = round(float(fields[1]), 1)
+        except (IndexError, ValueError):
+            pass
 
     elif line.startswith('$YDDBT'):
         try:
@@ -244,7 +283,10 @@ def listen_nmea2000():
                 latest['depth_ft'],
                 latest['rpm'],
                 latest['voltage'],
-                latest['fuel']
+                latest['fuel'],
+                latest['rate_of_turn'],
+                latest['pitch'],
+                latest['roll']
                 )
 
 def convert_latitude_to_dms(lat_str):
