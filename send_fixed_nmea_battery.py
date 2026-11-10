@@ -6,6 +6,7 @@ import os
 import socket
 import time
 from dataclasses import dataclass
+from datetime import datetime
 
 from dotenv import load_dotenv
 
@@ -13,6 +14,7 @@ load_dotenv()
 
 DEFAULT_PORT = 3000
 SEND_INTERVAL_SECONDS = 15
+RECONNECT_DELAY_SECONDS = 2
 NMEA2000_PRIORITY = 6
 
 
@@ -160,16 +162,25 @@ def main() -> int:
         f"{SEND_INTERVAL_SECONDS} seconds. Press Ctrl+C to stop."
     )
     try:
-        with socket.create_connection((host, port), timeout=5) as connection:
-            while True:
-                for frame in frames:
-                    connection.sendall(frame)
-                    print(f"Sent: {frame.decode('ascii').rstrip()}")
-                time.sleep(SEND_INTERVAL_SECONDS)
+        while True:
+            try:
+                with socket.create_connection((host, port), timeout=5) as connection:
+                    while True:
+                        for frame in frames:
+                            connection.sendall(frame)
+                            sent_at = datetime.now().astimezone().isoformat(
+                                timespec="seconds"
+                            )
+                            print(f"[{sent_at}] Sent: {frame.decode('ascii').rstrip()}")
+                        time.sleep(SEND_INTERVAL_SECONDS)
+            except OSError as error:
+                print(
+                    f"Gateway connection lost ({error}); reconnecting in "
+                    f"{RECONNECT_DELAY_SECONDS} seconds."
+                )
+                time.sleep(RECONNECT_DELAY_SECONDS)
     except KeyboardInterrupt:
         print("\nStopped.")
-    except OSError as error:
-        parser.error(f"Could not send data to {host}:{port}: {error}")
     return 0
 
 
