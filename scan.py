@@ -1,9 +1,12 @@
 import socket
 import struct
+import os
+from dotenv import load_dotenv
 
-# Gateway connection settings
-HOST = '192.168.30.163'  # Replace with your gateway IP
-PORT = 2000            # TCP port for NMEA 2000 stream
+load_dotenv()
+
+HOST = os.getenv("YD_Gateway_IP", "192.168.30.162")
+PORT = int(os.getenv("YD_Gateway_PORT", "2000"))
 
 def parse_pgn_128267(data):
     # PGN 128267: Water Depth

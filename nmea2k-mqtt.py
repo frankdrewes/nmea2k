@@ -27,8 +27,8 @@ LISTENER_DURATION =  int(os.getenv("LISTENER_DURATION",30))
 MQTT_TOPIC =  "sensor/nmea2k"
 MQTT_LOCATION_TOPIC= "autodiscovery/device_tracker/boat_tracker/config"
 
-GATEWAY_HOST = '192.168.30.163'
-GATEWAY_PORT = 2000
+GATEWAY_HOST = os.getenv("YD_Gateway_IP", "192.168.30.162")
+GATEWAY_PORT = int(os.getenv("YD_Gateway_PORT", "2000"))
 
 # Initialize latest values
 latest = {

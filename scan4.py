@@ -15,8 +15,8 @@ from rich.table import Table
 
 load_dotenv()
 
-DEFAULT_HOST = "192.168.30.163"
-DEFAULT_PORT = 2000
+DEFAULT_HOST = os.getenv("YD_Gateway_IP", "192.168.30.162")
+DEFAULT_PORT = int(os.getenv("YD_Gateway_PORT", "2000"))
 DEFAULT_DURATION = 60
 
 console = Console(force_terminal=True)

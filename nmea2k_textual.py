@@ -1,14 +1,18 @@
 import asyncio
+import os
 import socket
 from typing import TypeAlias
 
+from dotenv import load_dotenv
 from textual import work
 from textual.app import App, ComposeResult
 from textual.containers import Grid, Vertical
 from textual.widgets import Footer, Header, RichLog, Static
 
-HOST = "192.168.30.163"
-PORT = 2000
+load_dotenv()
+
+HOST = os.getenv("YD_Gateway_IP", "192.168.30.162")
+PORT = int(os.getenv("YD_Gateway_PORT", "2000"))
 RECONNECT_DELAY = 5
 
 LatestValues: TypeAlias = dict[str, int | float | str | None]
@@ -125,6 +129,7 @@ def parse_line(line: str, latest: LatestValues) -> bool:
 class NmeaDashboard(App[None]):
     TITLE = "NMEA 2000 Telemetry"
     BINDINGS = [("p", "toggle_log_pause", "Pause/resume raw log")]
+    ALLOW_SELECT = True
     CSS = """
     #dashboard {
         grid-size: 2 2;
