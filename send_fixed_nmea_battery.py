@@ -163,22 +163,22 @@ def main() -> int:
     )
     try:
         while True:
+            sent_at = datetime.now().astimezone().isoformat(timespec="seconds")
             try:
                 with socket.create_connection((host, port), timeout=5) as connection:
-                    while True:
-                        for frame in frames:
-                            connection.sendall(frame)
-                            sent_at = datetime.now().astimezone().isoformat(
-                                timespec="seconds"
-                            )
-                            print(f"[{sent_at}] Sent: {frame.decode('ascii').rstrip()}")
-                        time.sleep(SEND_INTERVAL_SECONDS)
+                    for frame in frames:
+                        connection.sendall(frame)
+                    print(f"[{sent_at}] Sent {len(frames)} battery frames:")
+                    for frame in frames:
+                        print(f"  {frame.decode('ascii').rstrip()}")
             except OSError as error:
                 print(
-                    f"Gateway connection lost ({error}); reconnecting in "
-                    f"{RECONNECT_DELAY_SECONDS} seconds."
+                    f"[{sent_at}] Gateway connection failed ({error}); "
+                    f"retrying in {RECONNECT_DELAY_SECONDS} seconds."
                 )
                 time.sleep(RECONNECT_DELAY_SECONDS)
+                continue
+            time.sleep(SEND_INTERVAL_SECONDS)
     except KeyboardInterrupt:
         print("\nStopped.")
     return 0
