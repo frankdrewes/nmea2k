@@ -15,6 +15,7 @@ from rich.table import Table
 from log_raw import (
     FastPacketDecoder,
     Nmea2000Frame,
+    PGN_NAMES,
     decode_payload,
     parse_raw_frame,
 )
@@ -146,69 +147,75 @@ def _request_frame(source: int, destination: int, requested_pgn: int) -> bytes:
     ).encode("ascii")
 
 
-def _format_source(source: int, info: SourceInfo) -> list[str]:
-    lines = [f"Source {source}:"]
-    claim = info.address_claim
-    product = info.product_info
-    if claim is None:
-        if info.manufacturer_hint is None:
-            lines.append("  Manufacturer: not identified")
-        else:
-            lines.append(
-                f"  Manufacturer: {info.manufacturer_hint} "
-                f"(code {info.manufacturer_code_hint}, from proprietary PGN)"
-            )
-    else:
-        lines.append(
-            f"  Manufacturer: {claim['manufacturer']} "
-            f"(code {claim['manufacturer_code']})"
-        )
-        lines.append(f"  Device class: {claim['device_class']}")
-        lines.append(f"  Device function: {claim['device_function']}")
-        lines.append(f"  Unique number: {claim['unique_number']}")
-
-    if product is None:
-        lines.append("  Model: Product Information not received")
-    else:
-        lines.append(f"  Model: {product['model_id'] or 'not supplied'}")
-        lines.append(f"  Product code: {product['product_code']}")
-        lines.append(f"  Model version: {product['model_version'] or 'not supplied'}")
-        lines.append(
-            f"  Software version: {product['software_version'] or 'not supplied'}"
-        )
-        lines.append(f"  Serial code: {product['serial_code'] or 'not supplied'}")
-        lines.append(f"  NMEA 2000 version: {product['nmea_2000_version']}")
-        if "certification_level" in product:
-            lines.append(f"  Certification: {product['certification_level']}")
-            lines.append(f"  Load equivalency: {product['load_equivalency']}")
-    observed = ", ".join(str(pgn) for pgn in sorted(info.observed_pgns))
-    lines.append(f"  Observed PGNs: {observed or 'none'}")
-    return lines
-
-
 def create_source_table(sources: dict[int, SourceInfo]) -> Table:
-    table = Table(title="Source Summary")
-    table.add_column("Manufacturer")
-    table.add_column("Source", justify="right")
-    table.add_column("Model")
-    table.add_column("Model Version")
-    table.add_column("Software Version")
+    table = Table(title="NMEA 2000 Source Report", show_lines=True)
+    table.add_column("Source", justify="right", no_wrap=True)
+    table.add_column("Section", no_wrap=True)
+    table.add_column("Item")
+    table.add_column("Value")
 
     for source in sorted(sources):
         info = sources[source]
         claim = info.address_claim
         product = info.product_info
+
+        def add_row(section: str, item: str, value: object) -> None:
+            table.add_row(str(source), section, item, str(value))
+
         if claim is not None:
-            manufacturer = str(claim["manufacturer"])
+            claim_fields = (
+                ("Manufacturer", claim["manufacturer"]),
+                ("Manufacturer code", claim["manufacturer_code"]),
+                ("Unique number", claim["unique_number"]),
+                ("ECU instance", claim["ecu_instance"]),
+                ("Function instance", claim["function_instance"]),
+                ("Device function", claim["device_function"]),
+                ("Device class", claim["device_class"]),
+                ("System instance", claim["system_instance"]),
+                ("Industry group", claim["industry_group"]),
+                (
+                    "Arbitrary address capable",
+                    "Yes" if claim["arbitrary_address_capable"] else "No",
+                ),
+            )
+            for item, value in claim_fields:
+                add_row("Address Claim", item, value)
         else:
-            manufacturer = info.manufacturer_hint or "Not identified"
-        table.add_row(
-            manufacturer,
-            str(source),
-            str(product["model_id"] or "Not received") if product else "Not received",
-            str(product["model_version"] or "Not received") if product else "Not received",
-            str(product["software_version"] or "Not received") if product else "Not received",
+            add_row(
+                "Address Claim",
+                "Manufacturer",
+                info.manufacturer_hint or "Not identified",
+            )
+            if info.manufacturer_code_hint is not None:
+                add_row(
+                    "Address Claim",
+                    "Manufacturer code (proprietary PGN)",
+                    info.manufacturer_code_hint,
+                )
+
+        product_fields = (
+            ("Model", "model_id"),
+            ("Product code", "product_code"),
+            ("Model version", "model_version"),
+            ("Software version", "software_version"),
+            ("Serial code", "serial_code"),
+            ("NMEA 2000 version", "nmea_2000_version"),
+            ("Certification level", "certification_level"),
+            ("Load equivalency", "load_equivalency"),
         )
+        for label, key in product_fields:
+            value = product.get(key, "Not supplied") if product else "Not received"
+            add_row("Product Information", label, value or "Not supplied")
+
+        if info.observed_pgns:
+            for pgn in sorted(info.observed_pgns):
+                add_row(
+                    "Observed PGN",
+                    f"PGN {pgn}",
+                    PGN_NAMES.get(pgn, "Unknown PGN description"),
+                )
+        else:
+            add_row("Observed PGN", "PGNs", "None observed")
     return table
 
 
@@ -381,12 +388,11 @@ def main() -> int:
     except OSError as error:
         parser.exit(1, f"Gateway connection failed: {error}\n")
 
-    print(f"Observed {len(sources)} source(s) in {args.seconds:g} seconds.")
+    console = Console()
+    console.print(f"Observed {len(sources)} source(s) in {args.seconds:g} seconds.")
     if not sources:
-        print("No NMEA 2000 sources observed.")
-    for source in sorted(sources):
-        print("\n".join(_format_source(source, sources[source])))
-    Console().print(create_source_table(sources))
+        console.print("No NMEA 2000 sources observed.")
+    console.print(create_source_table(sources))
     return 0
 
 
