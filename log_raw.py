@@ -18,6 +18,8 @@ RECONNECT_DELAY_SECONDS = 2
 
 PGN_NAMES = {
     126208: "NMEA Group Function",
+    126720: "Manufacturer Proprietary Fast Packet",
+    126993: "Heartbeat",
     127237: "Heading/Track Control",
     127245: "Rudder",
     127250: "Vessel Heading",
@@ -28,14 +30,31 @@ PGN_NAMES = {
     127505: "Fluid Level",
     127506: "DC Detailed Status",
     127508: "Battery Status",
+    65359: "SeaTalk Pilot Heading",
+    65360: "SeaTalk Pilot Locked Heading",
+    65379: "SeaTalk Pilot Mode",
     128267: "Water Depth",
     129025: "Position, Rapid Update",
     129026: "COG & SOG, Rapid Update",
     129029: "GNSS Position Data",
     130306: "Wind Data",
+    130916: "Manufacturer Proprietary Fast Packet",
 }
 
-FAST_PACKET_PGNS = {122368, 126208, 127237, 127489, 129029}
+FAST_PACKET_PGNS = {122368, 126208, 126720, 127237, 127489, 129029, 130916}
+RAYMARINE_PILOT_MODES = {
+    0: "Standby",
+    64: "Auto, compass commanded",
+    256: "Wind",
+    384: "Track",
+    385: "No Drift",
+}
+SEATALK1_COMMANDS = {
+    132: "Compass heading, autopilot course, and rudder position",
+    156: "Compass heading and rudder position",
+    164: "Device identification query/response",
+    165: "GPS and DGPS information",
+}
 FLUID_TYPES = {
     0: "fuel",
     1: "water",
@@ -183,15 +202,67 @@ def _signed(
     return int(value) if scale == 1 else value
 
 
+def _decode_manufacturer_payload(
+    pgn: int, payload: bytes
+) -> dict[str, int | float | str | None] | None:
+    if len(payload) < 2:
+        return None
+
+    header = int.from_bytes(payload[:2], "little")
+    manufacturer_code = header & 0x07FF
+    industry_code = (header >> 13) & 0x07
+    manufacturer = {1851: "Raymarine"}.get(
+        manufacturer_code, f"unknown ({manufacturer_code})"
+    )
+    industry = {4: "Marine Industry"}.get(
+        industry_code, f"unknown ({industry_code})"
+    )
+
+    values: dict[str, int | float | str | None] = {
+        "manufacturer": manufacturer,
+        "manufacturer_code": manufacturer_code,
+        "industry": industry,
+    }
+    if pgn == 126720 and len(payload) >= 4:
+        proprietary_id = payload[2]
+        command = payload[3]
+        values.update(
+            proprietary_id=(
+                "SeaTalk 1 Encoded" if proprietary_id == 240 else proprietary_id
+            ),
+            command=("SeaTalk1" if command == 129 else command),
+        )
+        if proprietary_id == 240 and command == 129 and len(payload) >= 5:
+            seatalk_command = payload[4]
+            values["seatalk1_command"] = SEATALK1_COMMANDS.get(
+                seatalk_command, f"unknown ({seatalk_command})"
+            )
+            values["seatalk1_command_id"] = seatalk_command
+            vendor_data = payload[5:]
+        else:
+            vendor_data = payload[4:]
+    else:
+        vendor_data = payload[2:]
+
+    if pgn in {126720, 130916}:
+        values["vendor_data"] = " ".join(f"{byte:02X}" for byte in vendor_data)
+    return values
+
+
 def decode_payload(pgn: int, payload: bytes) -> dict[str, int | float | str | None] | None:
     """Decode common NMEA 2000 PGNs; return None for unsupported payloads."""
     if pgn == 127245 and len(payload) >= 8:
         angle_scale = 0.0001 * 180 / math.pi
+        direction_order = payload[1] & 0x07
         return {
-            "instance": payload[1],
-            "direction_order": None if payload[2] == 0xFF else payload[2],
-            "angle_order_deg": _signed(payload, 3, 2, angle_scale),
-            "rudder_position_deg": _signed(payload, 5, 2, angle_scale),
+            "instance": None if payload[0] == 0xFF else payload[0],
+            "direction_order": {
+                0: "no order",
+                1: "move to starboard",
+                2: "move to port",
+            }.get(direction_order),
+            "angle_order_deg": _signed(payload, 2, 2, angle_scale),
+            "rudder_position_deg": _signed(payload, 4, 2, angle_scale),
         }
 
     if pgn == 127250 and len(payload) >= 8:
@@ -219,6 +290,50 @@ def decode_payload(pgn: int, payload: bytes) -> dict[str, int | float | str | No
             "pitch_deg": _signed(payload, 3, 2, angle_scale),
             "roll_deg": _signed(payload, 5, 2, angle_scale),
         }
+
+    if pgn == 126993 and len(payload) >= 8:
+        status = payload[3]
+        return {
+            "data_transmit_offset_ms": _unsigned(payload, 0, 2),
+            "sequence_counter": payload[2],
+            "controller_1_state": {
+                0: "error active",
+                1: "error passive",
+                2: "bus off",
+            }.get(status & 0x03),
+            "controller_2_state": {
+                0: "error active",
+                1: "error passive",
+                2: "bus off",
+            }.get((status >> 2) & 0x03),
+            "equipment_status": {0: "operational", 1: "fault"}.get(
+                (status >> 4) & 0x03
+            ),
+        }
+
+    if pgn in {65359, 65360} and len(payload) >= 8:
+        angle_scale = 0.0001 * 180 / math.pi
+        values = _decode_manufacturer_payload(pgn, payload) or {}
+        heading_names = (
+            ("heading_true_deg", "heading_magnetic_deg")
+            if pgn == 65359
+            else ("target_heading_true_deg", "target_heading_magnetic_deg")
+        )
+        values["sid"] = None if payload[2] == 0xFF else payload[2]
+        values[heading_names[0]] = _unsigned(payload, 3, 2, angle_scale)
+        values[heading_names[1]] = _unsigned(payload, 5, 2, angle_scale)
+        return values
+
+    if pgn == 65379 and len(payload) >= 8:
+        values = _decode_manufacturer_payload(pgn, payload) or {}
+        mode = int.from_bytes(payload[2:4], "little")
+        values.update(
+            pilot_mode=RAYMARINE_PILOT_MODES.get(mode, f"unknown ({mode})"),
+            pilot_mode_code=mode,
+            sub_mode=_unsigned(payload, 4, 2),
+            pilot_mode_data=None if payload[6] == 0xFF else payload[6],
+        )
+        return values
 
     if pgn == 127488 and len(payload) >= 6:
         return {
@@ -322,6 +437,9 @@ def decode_payload(pgn: int, payload: bytes) -> dict[str, int | float | str | No
             "wind_angle_deg": _unsigned(payload, 3, 2, 0.0001 * 180 / math.pi),
             "reference": references.get(reference, "unknown"),
         }
+
+    if pgn in {126720, 130916}:
+        return _decode_manufacturer_payload(pgn, payload)
 
     return None
 
