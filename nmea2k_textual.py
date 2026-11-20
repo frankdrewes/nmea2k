@@ -1,7 +1,8 @@
 import asyncio
 import os
 import socket
-from typing import TypeAlias
+from datetime import datetime
+from typing import BinaryIO, TypeAlias
 
 from dotenv import load_dotenv
 from textual import work
@@ -128,7 +129,11 @@ def parse_line(line: str, latest: LatestValues) -> bool:
 
 class NmeaDashboard(App[None]):
     TITLE = "NMEA 2000 Telemetry"
-    BINDINGS = [("p", "toggle_log_pause", "Pause/resume raw log")]
+    BINDINGS = [
+        ("f", "start_raw_logging", "Start raw file log"),
+        ("e", "stop_raw_logging", "End raw file log"),
+        ("p", "toggle_log_pause", "Pause/resume raw display"),
+    ]
     ALLOW_SELECT = True
     CSS = """
     #dashboard {
@@ -171,6 +176,7 @@ class NmeaDashboard(App[None]):
     def __init__(self) -> None:
         super().__init__()
         self.log_paused = False
+        self.raw_log_file: BinaryIO | None = None
         self.latest: LatestValues = {
             "rpm": None,
             "engine_temp": None,
@@ -232,6 +238,8 @@ class NmeaDashboard(App[None]):
                     if not data:
                         self._set_connection_status("Gateway closed the connection; reconnecting...")
                         break
+                    if self.raw_log_file is not None:
+                        self.raw_log_file.write(data)
                     line = data.decode(errors="replace").strip()
                     if not line:
                         continue
@@ -254,6 +262,34 @@ class NmeaDashboard(App[None]):
 
             if self.is_running:
                 await asyncio.sleep(RECONNECT_DELAY)
+
+    def action_start_raw_logging(self) -> None:
+        if self.raw_log_file is not None:
+            self.notify("Raw data logging is already active")
+            return
+
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+        filename = f"nmea2k_raw_{timestamp}.log"
+        try:
+            self.raw_log_file = open(filename, "xb")
+        except OSError as error:
+            self.notify(f"Could not start raw data log: {error}", severity="error")
+            return
+        self.notify(f"Raw data logging to {filename}")
+
+    def action_stop_raw_logging(self) -> None:
+        if self.raw_log_file is None:
+            self.notify("Raw data logging is not active")
+            return
+
+        self.raw_log_file.close()
+        self.raw_log_file = None
+        self.notify("Raw data logging ended")
+
+    def on_unmount(self) -> None:
+        if self.raw_log_file is not None:
+            self.raw_log_file.close()
+            self.raw_log_file = None
 
     def action_toggle_log_pause(self) -> None:
         self.log_paused = not self.log_paused
