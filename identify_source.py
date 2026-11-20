@@ -9,6 +9,8 @@ import time
 from dataclasses import dataclass, field
 
 from dotenv import load_dotenv
+from rich.console import Console
+from rich.table import Table
 
 from log_raw import (
     FastPacketDecoder,
@@ -182,6 +184,32 @@ def _format_source(source: int, info: SourceInfo) -> list[str]:
     observed = ", ".join(str(pgn) for pgn in sorted(info.observed_pgns))
     lines.append(f"  Observed PGNs: {observed or 'none'}")
     return lines
+
+
+def create_source_table(sources: dict[int, SourceInfo]) -> Table:
+    table = Table(title="Source Summary")
+    table.add_column("Manufacturer")
+    table.add_column("Source", justify="right")
+    table.add_column("Model")
+    table.add_column("Model Version")
+    table.add_column("Software Version")
+
+    for source in sorted(sources):
+        info = sources[source]
+        claim = info.address_claim
+        product = info.product_info
+        if claim is not None:
+            manufacturer = str(claim["manufacturer"])
+        else:
+            manufacturer = info.manufacturer_hint or "Not identified"
+        table.add_row(
+            manufacturer,
+            str(source),
+            str(product["model_id"] or "Not received") if product else "Not received",
+            str(product["model_version"] or "Not received") if product else "Not received",
+            str(product["software_version"] or "Not received") if product else "Not received",
+        )
+    return table
 
 
 def identify_sources(
@@ -358,6 +386,7 @@ def main() -> int:
         print("No NMEA 2000 sources observed.")
     for source in sorted(sources):
         print("\n".join(_format_source(source, sources[source])))
+    Console().print(create_source_table(sources))
     return 0
 
 
