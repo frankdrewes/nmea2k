@@ -43,7 +43,16 @@ PGN_NAMES = {
     130916: "Manufacturer Proprietary Fast Packet",
 }
 
-FAST_PACKET_PGNS = {122368, 126208, 126720, 127237, 127489, 129029, 130916}
+FAST_PACKET_PGNS = {
+    122368,
+    126208,
+    126720,
+    126996,
+    127237,
+    127489,
+    129029,
+    130916,
+}
 RAYMARINE_PILOT_MODES = {
     0: "Standby",
     64: "Auto, compass commanded",
