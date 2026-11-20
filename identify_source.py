@@ -158,9 +158,17 @@ def create_source_table(sources: dict[int, SourceInfo]) -> Table:
         info = sources[source]
         claim = info.address_claim
         product = info.product_info
+        first_source_row = True
 
         def add_row(section: str, item: str, value: object) -> None:
-            table.add_row(str(source), section, item, str(value))
+            nonlocal first_source_row
+            table.add_row(
+                str(source) if first_source_row else "",
+                section,
+                item,
+                str(value),
+            )
+            first_source_row = False
 
         if claim is not None:
             claim_fields = (
@@ -208,14 +216,15 @@ def create_source_table(sources: dict[int, SourceInfo]) -> Table:
             add_row("Product Information", label, value or "Not supplied")
 
         if info.observed_pgns:
+            add_row("Observed PGNs", "", "")
             for pgn in sorted(info.observed_pgns):
                 add_row(
-                    "Observed PGN",
-                    f"PGN {pgn}",
+                    "",
+                    f"  PGN {pgn}",
                     PGN_NAMES.get(pgn, "Unknown PGN description"),
                 )
         else:
-            add_row("Observed PGN", "PGNs", "None observed")
+            add_row("Observed PGNs", "", "None observed")
     return table
 
 
