@@ -4,6 +4,7 @@
 import argparse
 import math
 import os
+import select
 import socket
 import time
 from dataclasses import dataclass
@@ -15,6 +16,7 @@ load_dotenv()
 DEFAULT_HOST = os.getenv("YD_Gateway_IP", "192.168.30.162")
 DEFAULT_PORT = 3000
 RECONNECT_DELAY_SECONDS = 2
+CAPTURE_INTERVAL_SECONDS = 10
 
 PGN_NAMES = {
     126208: "NMEA Group Function",
@@ -479,50 +481,135 @@ def format_frame(
     )
 
 
-def listen(host: str, port: int) -> None:
+def sort_capture_records(
+    records: list[tuple[int, str, int, str]],
+) -> list[str]:
+    return [record[3] for record in sorted(records, key=lambda item: item[:3])]
+
+
+def _format_received_lines(
+    line: str, decoder: FastPacketDecoder
+) -> tuple[Nmea2000Frame, list[str]]:
+    frame = parse_raw_frame(line)
+    values = None if frame.pgn in FAST_PACKET_PGNS else decode_payload(
+        frame.pgn, frame.payload
+    )
+    output = [format_frame(frame, values)]
+
+    message = decoder.add(frame)
+    if message is not None:
+        payload = " ".join(f"{byte:02X}" for byte in message)
+        values = decode_payload(frame.pgn, message)
+        value_text = format_values(values) if values is not None else ""
+        output.append(
+            f"{frame.timestamp or '-'} source={frame.source} "
+            f"direction={frame.direction or '-'} "
+            f"Fast Packet complete: PGN={frame.pgn} "
+            f"length={len(message)} data=[{payload}]"
+            f"{value_text}"
+        )
+    return frame, output
+
+
+def _print_capture(
+    records: list[tuple[int, str, int, str]], errors: list[str], interval: float
+) -> None:
+    print(f"\n--- {interval:g}-second capture ---")
+    sorted_lines = sort_capture_records(records)
+    if not sorted_lines and not errors:
+        print("No NMEA 2000 data received.")
+    for line in sorted_lines:
+        print(line)
+    for error in errors:
+        print(error)
+    print("--- end capture ---")
+
+
+def listen(host: str, port: int, interval: float) -> None:
+    print(
+        f"Collecting from {host}:{port} in {interval:g}-second windows; "
+        "press Ctrl+C to stop."
+    )
+    records: list[tuple[int, str, int, str]] = []
+    errors: list[str] = []
+    sequence = 0
     decoder = FastPacketDecoder()
-    print(f"Listening to YD RAW TCP at {host}:{port}; press Ctrl+C to stop.")
+    read_buffer = bytearray()
+    connection: socket.socket | None = None
+    next_capture = time.monotonic() + interval
+    retry_at = 0.0
+
     while True:
-        try:
-            with socket.create_connection((host, port), timeout=5) as connection:
-                connection.settimeout(None)
+        now = time.monotonic()
+        if now >= next_capture:
+            _print_capture(records, errors, interval)
+            records.clear()
+            errors.clear()
+            sequence = 0
+            next_capture = now + interval
+
+        if connection is None:
+            if now < retry_at:
+                time.sleep(min(retry_at - now, next_capture - now))
+                continue
+            try:
+                connection = socket.create_connection(
+                    (host, port), timeout=max(0.1, min(5.0, next_capture - now))
+                )
+                connection.setblocking(False)
+                decoder = FastPacketDecoder()
+                read_buffer.clear()
                 print(f"Connected to {host}:{port}")
-                stream = connection.makefile("r", encoding="ascii", errors="replace")
-                with stream:
-                    for line in stream:
-                        if not line.strip():
-                            continue
-                        try:
-                            frame = parse_raw_frame(line)
-                        except ValueError as error:
-                            print(f"Invalid frame: {line.rstrip()} ({error})")
-                            continue
+            except OSError as error:
+                errors.append(f"Connection failed: {error}")
+                retry_at = time.monotonic() + RECONNECT_DELAY_SECONDS
+                continue
 
-                        if frame.pgn in FAST_PACKET_PGNS:
-                            values = None
-                        else:
-                            values = decode_payload(frame.pgn, frame.payload)
-                        print(format_frame(frame, values))
-                        message = decoder.add(frame)
-                        if message is not None:
-                            payload = " ".join(f"{byte:02X}" for byte in message)
-                            values = decode_payload(frame.pgn, message)
-                            value_text = (
-                                format_values(values) if values is not None else ""
-                            )
-                            print(
-                                f"{frame.timestamp or '-'} source={frame.source} "
-                                f"direction={frame.direction or '-'} "
-                                f"Fast Packet complete: PGN={frame.pgn} "
-                                f"length={len(message)} data=[{payload}]"
-                                f"{value_text}"
-                            )
-                print("Gateway closed the connection.")
-        except OSError as error:
-            print(f"Connection failed: {error}")
+        try:
+            readable, _, _ = select.select(
+                [connection], [], [], max(0.0, next_capture - time.monotonic())
+            )
+            if not readable:
+                continue
+            chunk = connection.recv(4096)
+        except (OSError, ValueError) as error:
+            errors.append(f"Connection error: {error}")
+            connection.close()
+            connection = None
+            retry_at = time.monotonic() + RECONNECT_DELAY_SECONDS
+            continue
 
-        print(f"Retrying in {RECONNECT_DELAY_SECONDS} seconds...")
-        time.sleep(RECONNECT_DELAY_SECONDS)
+        if not chunk:
+            if read_buffer.strip():
+                lines = [bytes(read_buffer)]
+            else:
+                lines = []
+            read_buffer.clear()
+            connection.close()
+            connection = None
+            retry_at = time.monotonic() + RECONNECT_DELAY_SECONDS
+        else:
+            read_buffer.extend(chunk)
+            lines = []
+            while b"\n" in read_buffer:
+                line, _, remainder = read_buffer.partition(b"\n")
+                lines.append(line)
+                read_buffer = bytearray(remainder)
+
+        for raw_line in lines:
+            line = raw_line.decode("ascii", errors="replace").strip()
+            if not line:
+                continue
+            try:
+                frame, output_lines = _format_received_lines(line, decoder)
+            except ValueError as error:
+                errors.append(f"Invalid frame: {line} ({error})")
+                continue
+            for output_line in output_lines:
+                records.append(
+                    (frame.source, frame.timestamp or "", sequence, output_line)
+                )
+                sequence += 1
 
 
 def main() -> int:
@@ -536,12 +623,20 @@ def main() -> int:
         default=int(os.getenv("YD_Gateway_PORT_RAW", str(DEFAULT_PORT))),
         help="Gateway RAW TCP port (default: 3000)",
     )
+    parser.add_argument(
+        "--interval",
+        type=float,
+        default=CAPTURE_INTERVAL_SECONDS,
+        help="Capture and output interval in seconds (default: 10)",
+    )
     args = parser.parse_args()
     if not 1 <= args.port <= 65535:
         parser.error("--port must be between 1 and 65535")
+    if args.interval <= 0:
+        parser.error("--interval must be greater than zero")
 
     try:
-        listen(args.host, args.port)
+        listen(args.host, args.port, args.interval)
     except KeyboardInterrupt:
         print("\nStopped.")
     return 0
